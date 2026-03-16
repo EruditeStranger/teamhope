@@ -11,6 +11,13 @@ import json
 import re
 import datetime
 import random
+import time
+
+try:
+    from deep_translator import GoogleTranslator
+    _TRANSLATOR_AVAILABLE = True
+except ImportError:
+    _TRANSLATOR_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -67,6 +74,39 @@ KEYWORD_WEIGHTS = {
 
 MAX_SCORE = 10
 
+_CJK_RANGES = (
+    (0x3000, 0x9FFF),   # CJK Unified Ideographs + kana + punctuation
+    (0xF900, 0xFAFF),   # CJK Compatibility Ideographs
+    (0x20000, 0x2A6DF), # CJK Extension B
+)
+
+
+def _has_japanese(text: str) -> bool:
+    """Return True if text contains at least one CJK/kana character."""
+    for ch in text:
+        cp = ord(ch)
+        if any(lo <= cp <= hi for lo, hi in _CJK_RANGES):
+            return True
+    return False
+
+
+def translate_text(text: str) -> str:
+    """Translate Japanese text to English using deep-translator.
+
+    Returns the translated string, or the original text on any error.
+    Only sends a request if the text actually contains CJK characters.
+    """
+    if not _has_japanese(text):
+        return text
+    if not _TRANSLATOR_AVAILABLE:
+        print("[WARN] deep_translator not installed — skipping translation")
+        return text
+    try:
+        return GoogleTranslator(source="ja", target="en").translate(text) or text
+    except Exception as e:
+        print(f"[WARN] translate_text failed: {e}")
+        return text
+
 
 def compute_ferrari_score(text: str) -> int:
     """Score a job listing 1-10 based on keyword relevance to Sumika's profile."""
@@ -75,8 +115,10 @@ def compute_ferrari_score(text: str) -> int:
     for keyword, weight in KEYWORD_WEIGHTS.items():
         if keyword.lower() in text_lower:
             raw += weight
-    # Normalize: cap at MAX_SCORE. A raw score of 15+ maps to 10.
-    score = min(MAX_SCORE, max(1, round(raw * MAX_SCORE / 15)))
+    # Normalize: cap at MAX_SCORE. A raw score of 30+ maps to 10.
+    # Threshold is high because JICA listings naturally contain generic
+    # international keywords — only Sumika-specific matches should push 8+.
+    score = min(MAX_SCORE, max(1, round(raw * MAX_SCORE / 30)))
     return score
 
 
@@ -93,12 +135,37 @@ def score_emoji(score: int) -> str:
 # Scrapers — one per source
 # ---------------------------------------------------------------------------
 
+def fetch_job_detail(url: str) -> str:
+    """Fetch the full text content of a JICA PARTNER job detail page.
+
+    Returns the visible text of the page as a string, or an empty string
+    on any network or HTTP error.
+    """
+    try:
+        resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        # Remove script/style noise before extracting text
+        for tag in soup(["script", "style", "noscript"]):
+            tag.decompose()
+        return soup.get_text(separator=" ", strip=True)
+    except requests.RequestException as e:
+        print(f"[WARN] fetch_job_detail({url}) failed: {e}")
+        return ""
+
+
 def scrape_jica_partner() -> list[dict]:
-    """Scrape JICA PARTNER job listings across all pages (~300 listings)."""
+    """Scrape JICA PARTNER job listings across all pages (~300 listings).
+
+    Two-pass approach:
+      1. Collect all job links and titles from the paginated search results.
+      2. Fetch each detail page to get the full description for accurate scoring.
+    """
     base_url = "https://partner.jica.go.jp"
-    jobs = []
+    collected = []   # list of (title, href, search_page_description)
     seen_links = set()
 
+    # --- Pass 1: collect links from search pages ---
     for page in range(1, 35):  # Up to ~31 pages, with margin
         url = f"{base_url}/Recruit/Search?page={page}"
         try:
@@ -106,13 +173,16 @@ def scrape_jica_partner() -> list[dict]:
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
 
-            # .for-clawler are <a> tags themselves (not containers with child links)
-            cards = soup.select("a.for-clawler")
+            # Job detail links match /Recruit/Detail/{ID}
+            cards = soup.select("a[href*='/Recruit/Detail/']")
             if not cards:
                 break  # No more results, stop paginating
 
             for card in cards:
                 href = card.get("href", "")
+                # Skip non-detail links that happen to contain the substring
+                if not re.search(r"/Recruit/Detail/\d+", href):
+                    continue
                 if not href.startswith("http"):
                     href = base_url + href
                 if href in seen_links:
@@ -120,19 +190,11 @@ def scrape_jica_partner() -> list[dict]:
                 seen_links.add(href)
 
                 title = card.get_text(strip=True)
-
-                # Try to get more context from the card's parent container
-                parent = card.find_parent("div")
-                description = parent.get_text(strip=True) if parent else ""
-                full_text = f"{title} {description}"
-
-                jobs.append({
-                    "title": title,
-                    "link": href,
-                    "description": description[:300],
-                    "source": "JICA PARTNER",
-                    "score": compute_ferrari_score(full_text),
-                })
+                if not title:
+                    # Try parent element for title text
+                    parent = card.find_parent("div")
+                    title = parent.get_text(strip=True) if parent else href
+                collected.append((title, href, ""))
 
             print(f"[INFO] JICA page {page}: found {len(cards)} listings")
 
@@ -140,56 +202,36 @@ def scrape_jica_partner() -> list[dict]:
             print(f"[WARN] JICA PARTNER page {page} failed: {e}")
             break  # Don't hammer the server if it's down
 
-    print(f"[INFO] JICA PARTNER total: {len(jobs)} listings")
-    return jobs
+    total = len(collected)
+    print(f"[INFO] JICA PARTNER search pages done: {total} listings collected — fetching detail pages...")
 
-
-def scrape_jetro() -> list[dict]:
-    """Scrape JETRO recruitment sub-pages for active openings."""
-    base = "https://www.jetro.go.jp"
-    sub_pages = [
-        "/jetro/recruit/",            # Main recruitment portal
-        "/jetro/recruit/career/",     # Experienced hire
-        "/jetro/recruit/staff-1.html",  # Full-time contract
-        "/jetro/recruit/staff.html",    # Part-time contract
-        "/jetro/recruit/advisor.html",  # Advisors/specialists
-        "/jetro/recruit/ninkitsuki.html",  # Fixed-term
-    ]
+    # --- Pass 2: fetch detail pages and score against detail content only ---
     jobs = []
-    seen_links = set()
+    for idx, (card_text, href, _snippet) in enumerate(collected, start=1):
+        detail_text = fetch_job_detail(href)
 
-    for path in sub_pages:
-        url = base + path
-        try:
-            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "html.parser")
+        # Extract a clean title from the detail page (first heading or first line)
+        # Fall back to first 80 chars of card text
+        title = card_text[:80].split("必要言語")[0].split("勤務地")[0].strip()
 
-            for link_elem in soup.select("a"):
-                title = link_elem.get_text(strip=True)
-                href = link_elem.get("href", "")
-                # Look for active recruitment announcements
-                if any(kw in title for kw in ["募集", "採用", "職員", "スタッフ", "求人", "応募"]):
-                    if not href.startswith("http"):
-                        href = base + href
-                    if href not in seen_links:
-                        seen_links.add(href)
-                        jobs.append({
-                            "title": title,
-                            "link": href,
-                            "description": "",
-                            "source": "JETRO",
-                            "score": compute_ferrari_score(title),
-                        })
-        except requests.RequestException as e:
-            print(f"[WARN] JETRO scrape failed for {path}: {e}")
+        jobs.append({
+            "title": title,
+            "link": href,
+            "description": detail_text[:500] if detail_text else "",
+            "source": "JICA PARTNER",
+            "score": compute_ferrari_score(detail_text) if detail_text else 1,
+        })
+
+        print(f"[INFO] JICA detail pages: {idx}/{total} fetched")
+        time.sleep(0.5)  # Be polite to the server
+
+    print(f"[INFO] JICA PARTNER total: {len(jobs)} listings scored")
     return jobs
 
 
 # Registry of all scrapers
 SCRAPERS = [
     scrape_jica_partner,
-    scrape_jetro,
 ]
 
 
@@ -228,17 +270,25 @@ def notify_discord(job: dict):
     emoji = score_emoji(score)
     framing = suggest_framing(job)
 
+    fields = [
+        {"name": "Source", "value": job["source"], "inline": True},
+        {"name": "Score", "value": f"{'🟢' * min(score, 10)}", "inline": True},
+    ]
+
+    if score >= 5:
+        english_title = translate_text(job["title"])
+        if english_title and english_title != job["title"]:
+            fields.append({"name": "English", "value": english_title, "inline": False})
+
+    fields.append({"name": "Framing Angle", "value": framing, "inline": False})
+
     embed = {
         "embeds": [{
             "title": f"{emoji} Ferrari Score: {score}/10",
             "description": f"**{job['title']}**",
             "url": job["link"],
             "color": 0xFF4500 if score >= 8 else 0xFFA500 if score >= 5 else 0x808080,
-            "fields": [
-                {"name": "Source", "value": job["source"], "inline": True},
-                {"name": "Score", "value": f"{'🟢' * min(score, 10)}", "inline": True},
-                {"name": "Framing Angle", "value": framing, "inline": False},
-            ],
+            "fields": fields,
             "footer": {"text": f"Scout | {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"},
         }]
     }
@@ -273,24 +323,45 @@ def suggest_framing(job: dict) -> str:
     return "\n".join(f"• {a}" for a in angles[:3])
 
 
-def send_heartbeat(stats: dict):
-    """Post a system status heartbeat to Discord."""
+def send_heartbeat(stats: dict, top_jobs: list | None = None):
+    """Post a system status heartbeat to Discord.
+
+    Args:
+        stats:    Run statistics dict (sources, new_jobs, errors, total_tracked).
+        top_jobs: Optional list of the highest-scored new job dicts (up to 5).
+                  When provided, a "Top Leads" field is appended to the embed.
+    """
     webhook = HEARTBEAT_WEBHOOK_URL
     if not webhook:
         print(f"[DRY RUN] Heartbeat: {stats}")
         return
 
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    fields = [
+        {"name": "Sources Scraped", "value": str(stats.get("sources", 0)), "inline": True},
+        {"name": "New Leads", "value": str(stats.get("new_jobs", 0)), "inline": True},
+        {"name": "Errors", "value": str(stats.get("errors", 0)), "inline": True},
+        {"name": "Total Tracked", "value": str(stats.get("total_tracked", 0)), "inline": True},
+    ]
+
+    if top_jobs:
+        lines = []
+        for job in top_jobs[:5]:
+            score = job.get("score", 0)
+            english_title = translate_text(job["title"])
+            emoji = "🔥" if score >= 5 else "📍"
+            lines.append(f"{emoji} {score}/10 — {english_title}")
+        fields.append({
+            "name": "Top Leads",
+            "value": "\n".join(lines),
+            "inline": False,
+        })
+
     embed = {
         "embeds": [{
             "title": "💓 Scout Heartbeat",
             "color": 0x00FF00 if stats.get("errors", 0) == 0 else 0xFF0000,
-            "fields": [
-                {"name": "Sources Scraped", "value": str(stats.get("sources", 0)), "inline": True},
-                {"name": "New Leads", "value": str(stats.get("new_jobs", 0)), "inline": True},
-                {"name": "Errors", "value": str(stats.get("errors", 0)), "inline": True},
-                {"name": "Total Tracked", "value": str(stats.get("total_tracked", 0)), "inline": True},
-            ],
+            "fields": fields,
             "footer": {"text": f"Scout | {now}"},
         }]
     }
@@ -363,7 +434,7 @@ def main(seed_mode: bool = False):
     # Deduplicate, notify new, sort by score (highest first)
     all_jobs.sort(key=lambda j: j["score"], reverse=True)
 
-    new_found = False
+    new_jobs_list: list[dict] = []
     for job in all_jobs:
         if job["link"] not in seen:
             if not seed_mode:
@@ -375,15 +446,18 @@ def main(seed_mode: bool = False):
                 "seen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
             stats["new_jobs"] += 1
-            new_found = True
+            new_jobs_list.append(job)
 
-    if new_found:
+    if new_jobs_list:
         stats["total_tracked"] = len(seen)
         save_seen_jobs(seen)
 
+    # Top 5 new leads (already sorted by score descending)
+    top_jobs = new_jobs_list[:5] if new_jobs_list else None
+
     if seed_mode:
         print(f"[INFO] Seeded {stats['new_jobs']} jobs into tracker (no notifications sent)")
-    send_heartbeat(stats)
+    send_heartbeat(stats, top_jobs=top_jobs)
 
 
 if __name__ == "__main__":

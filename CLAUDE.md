@@ -70,11 +70,19 @@ All three secrets can point to the same webhook during development.
 
 ## 6. Scraper (`main.py`)
 
-- **Sources:** JICA PARTNER, JICA Careers, JETRO, Hyogo International Association
-- **Scoring:** Weighted JP/EN keyword matching → normalized 1-10 "Ferrari Score"
-- **Alerts:** Discord embeds with score, source, and contextual "Framing Angle" (suggests how to position her experience for each role)
-- **Hype mode:** `python main.py --hype` sends a motivational message drawn from her real accomplishments
-- **Pluggable:** Add a new source by writing a function that returns `list[dict]` and appending to `SCRAPERS`
+- **Active source:** JICA PARTNER (`https://partner.jica.go.jp/Recruit/Search`) only
+  - JETRO removed (timeouts + no active openings)
+  - Hyogo International Association removed (no jobs section)
+  - JICA Careers removed (portal only, not scrapable)
+- **Two-pass approach:**
+  - Pass 1: Collect job detail links via `a[href*='/Recruit/Detail/']` across paginated search results; extract card-level title (truncated/cleaned at metadata boundaries)
+  - Pass 2: Fetch each detail page and score against the full page text
+- **Scoring:** Keyword matching against detail page text only (not card text); normalized to 1-10 Ferrari Score with a threshold of 30 (raw score 30+ = 10) — high threshold accounts for JICA being an international cooperation board where generic keywords appear everywhere
+- **Translation:** Jobs scoring 5+ are translated via `deep-translator` (Google Translate) for Discord alerts and heartbeat top leads
+- **Modes:**
+  - `--seed`: First-run mode — tracks all current jobs without sending alerts (baseline)
+  - `--hype`: Sends a motivational message to `#📍-the-north-star` drawn from her real accomplishments
+- **Alerts:** Discord embeds with Ferrari Score, translated title/snippet, and contextual "Framing Angle"
 
 ## 7. Vercel App (planned — not yet built)
 

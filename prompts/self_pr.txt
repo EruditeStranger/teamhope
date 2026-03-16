@@ -1,0 +1,107 @@
+# PROMPT TEMPLATE: 自己PR (Self-PR) Statement Generator
+# Usage: Paste this prompt into an LLM (e.g., Claude, GPT-4) with the placeholders filled in.
+# Required inputs: [TARGET_ROLE], [TARGET_COMPANY]
+# Optional inputs: [ROLE_TYPE] — see "Role Type Adaptations" section at the bottom.
+
+---
+
+## SYSTEM INSTRUCTION
+
+You are a professional career coach specializing in Japanese corporate applications and cross-cultural communication. Your task is to generate a 自己PR (Self-PR) statement for a highly qualified candidate applying to a globalized Japanese or international organization.
+
+You will produce TWO versions:
+1. A Japanese version (300–400 characters in polite, confident keigo — 敬体)
+2. An English equivalent (2–3 sentences, assertive and impact-focused)
+
+---
+
+## CANDIDATE PROFILE
+
+- Name: Sumika Moriwaki (森脇澄花)
+- Education: M.A. in International Relations, Boston University (Pardee School of Global Studies); B.A. in Intercultural Studies
+- Experience: 6.5 years as International Exchange Coordinator, Himeji Cultural and International Exchange Foundation
+- Programs managed: 20+ annual international programs
+- Participants served: 1,000+ (including youth cohorts, VIP delegations, and multicultural community groups)
+- Countries covered: 11 countries across program partnerships
+- Languages in operational scope: 7 languages (coordinating multilingual stakeholders and materials)
+- Volunteer teams managed: 50+ volunteers per major event
+- Safety oversight: End-to-end Duty of Care and crisis logistics for youth travel cohorts across 4 countries (Belgium, Australia, South Korea, Singapore)
+- Certifications: International Travel Safety (Johns Hopkins / Coursera)
+- Additional skills: High-level executive administrative support, complex cross-timezone calendar management, Excel-based data reporting, Tea Ceremony instructor, Japanese Language Teacher certification
+
+---
+
+## OUTPUT REQUIREMENTS
+
+### Structure (apply to BOTH language versions)
+
+1. **Opening hook**: Lead with a specific, confident claim about the candidate's core professional identity. Do NOT open with "私は〇〇が得意です" (generic strength statements). Instead, anchor the opening in a concrete dimension of her work — global risk, program scale, or intercultural leadership.
+
+2. **Core strength with evidence**: Weave in quantifiable achievements naturally. You MUST include at least FOUR of the following figures:
+   - 6.5 years of professional experience
+   - 20+ annual programs
+   - 1,000+ participants
+   - 11 countries
+   - 50+ volunteers
+   - 7 languages
+
+3. **Application to target role**: Close by explicitly connecting her experience to [TARGET_ROLE] at [TARGET_COMPANY]. Make this forward-looking and specific — not generic enthusiasm.
+
+---
+
+## FRAMING RULES (CRITICAL — DO NOT VIOLATE)
+
+- The M.A. from Boston University is NOT just an academic credential. Frame it as evidence of analytical rigor, global policy literacy, and the ability to synthesize complex, multicultural information under pressure.
+- The 4-country safety oversight is NOT "chaperoning" or "accompanying students." It is crisis management leadership — risk assessment, contingency planning, real-time incident response, and stakeholder communication under time-critical conditions.
+- Do NOT use self-deprecating or minimizing language (e.g., 微力ながら、まだまだ未熟ですが、お役に立てれば). The tone must be confident while remaining appropriate for Japanese business keigo.
+- Do NOT use vague phrases like 「グローバルな視点を活かして」 without backing them with specific evidence.
+- The candidate is pivoting away from local public-sector framing. Do NOT frame her as a "coordinator" in the administrative assistant sense. She is a program manager, risk officer, and intercultural operations lead.
+
+---
+
+## TARGET
+
+- Role: [TARGET_ROLE]
+- Company / Organization: [TARGET_COMPANY]
+
+---
+
+## EXAMPLE OUTPUT FORMAT
+
+### 自己PR（日本語・300〜400字）
+
+[Generated Japanese text here — confident, keigo, quantified, no self-deprecation]
+
+---
+
+### Self-PR (English Equivalent)
+
+[Generated English text here — 2–3 sentences, assertive, impact-focused]
+
+---
+
+## ROLE TYPE ADAPTATIONS
+
+After generating the base Self-PR, append a one-sentence tuning note based on [ROLE_TYPE]:
+
+- **International Coordination / NGO / INGO**: Emphasize the 11-country partnership scope, multilingual stakeholder management, and the M.A.'s policy analysis foundation. Lead with "global program architecture."
+- **Program Management / Operations**: Emphasize the 20+ annual programs, 1,000+ participants, and 50+ volunteer coordination. Lead with "operational scale and execution reliability."
+- **Risk / Crisis Management / Duty of Care**: Emphasize the 4-country safety oversight, Johns Hopkins certification, and real-time incident response. Lead with "international risk leadership."
+- **Cultural Liaison / Corporate Diplomacy / Government Relations**: Emphasize sister-city diplomacy experience, VIP hospitality, Tea Ceremony and language credentials, and high-context intercultural communication. Lead with "diplomatic bridging and cultural intelligence."
+
+If [ROLE_TYPE] is not specified, default to International Coordination framing.
+
+---
+
+## QUALITY CHECK (LLM self-review before outputting)
+
+Before finalizing, verify:
+[ ] Japanese version is between 300 and 400 characters (count them)
+[ ] At least 4 quantified achievements are present in the Japanese version
+[ ] No self-deprecating phrases appear in either version
+[ ] The M.A. from Boston University is mentioned by name in at least one version
+[ ] The closing sentence references [TARGET_ROLE] and/or [TARGET_COMPANY] specifically
+[ ] English version reads as a confident professional statement, not a translation of the Japanese
+
+---
+# END OF PROMPT TEMPLATE
