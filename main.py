@@ -400,10 +400,10 @@ def send_hype():
     message = random.choice(HYPE_MESSAGES)
     embed = {
         "embeds": [{
-            "title": "🌟 Daily Hype from Captain Hook",
+            "title": "🌟 Gambatte from Sumi-Pen",
             "description": message,
             "color": 0xFFD700,
-            "footer": {"text": "You've got this. — Project Asago-to-the-Moon 🚀"},
+            "footer": {"text": "You've got this — Project Asago-to-the-Moon 🚀"},
         }]
     }
 
