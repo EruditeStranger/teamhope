@@ -19,12 +19,20 @@ try:
 except ImportError:
     _TRANSLATOR_AVAILABLE = False
 
+try:
+    from supabase import create_client as _create_supabase_client
+    _SUPABASE_AVAILABLE = True
+except ImportError:
+    _SUPABASE_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 HEARTBEAT_WEBHOOK_URL = os.getenv("HEARTBEAT_WEBHOOK_URL", WEBHOOK_URL)
 HYPE_WEBHOOK_URL = os.getenv("HYPE_WEBHOOK_URL", WEBHOOK_URL)
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 DB_FILE = "seen_jobs.json"
 TARGETS_FILE = "targets.json"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -414,6 +422,41 @@ def send_hype():
 
 
 # ---------------------------------------------------------------------------
+# Supabase sync
+# ---------------------------------------------------------------------------
+
+def sync_to_supabase(jobs: list[dict]):
+    """Upsert jobs into Supabase Postgres. Skips if not configured."""
+    if not _SUPABASE_AVAILABLE or not SUPABASE_URL or not SUPABASE_KEY:
+        print("[INFO] Supabase not configured — skipping DB sync")
+        return
+
+    try:
+        sb = _create_supabase_client(SUPABASE_URL, SUPABASE_KEY)
+        upserted = 0
+        for job in jobs:
+            # Translate title for high-scoring jobs
+            translated = translate_text(job["title"]) if job["score"] >= 5 else ""
+
+            row = {
+                "title": job["title"],
+                "link": job["link"],
+                "description": job.get("description", "")[:500],
+                "source": job["source"],
+                "score": job["score"],
+                "translated_title": translated if translated != job["title"] else "",
+                "seen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+            # Upsert: insert or update score/description if link already exists
+            sb.table("jobs").upsert(row, on_conflict="link").execute()
+            upserted += 1
+
+        print(f"[INFO] Supabase sync: {upserted} jobs upserted")
+    except Exception as e:
+        print(f"[WARN] Supabase sync failed: {e}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -451,6 +494,9 @@ def main(seed_mode: bool = False):
     if new_jobs_list:
         stats["total_tracked"] = len(seen)
         save_seen_jobs(seen)
+
+    # Sync ALL scraped jobs to Supabase (upsert updates scores for existing jobs)
+    sync_to_supabase(all_jobs)
 
     # Top 5 new leads (already sorted by score descending)
     top_jobs = new_jobs_list[:5] if new_jobs_list else None

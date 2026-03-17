@@ -27,6 +27,8 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           HEARTBEAT_WEBHOOK_URL: ${{ secrets.HEARTBEAT_WEBHOOK_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python main.py
       - name: Run Hype
         if: github.event.inputs.mode == 'hype'

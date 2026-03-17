@@ -40,9 +40,9 @@ LINE Notify shut down March 2025. LINE Messaging API requires a business account
 
 ```
 scout/
-├── main.py                  # Scraper: multi-source, Ferrari Score (1-10), Discord alerts + heartbeat + hype
-├── requirements.txt         # requests, beautifulsoup4
-├── targets.json             # Curated "highway" organizations
+├── main.py                  # Scraper: JICA PARTNER, Ferrari Score (1-10), Discord alerts + heartbeat + hype
+├── requirements.txt         # requests, beautifulsoup4, deep-translator
+├── targets.json             # Curated organizations (active scrapers, watch list, future sources, target employers)
 ├── seen_jobs.json           # Tracked jobs with metadata (auto-generated)
 ├── CLAUDE.md                # This file — project context for AI agents
 ├── SKILLS.md                # Reusable skill definitions for implementation
@@ -50,11 +50,14 @@ scout/
 │   └── scrape.yaml          # Cron: scrape 9AM/9PM JST, hype 3PM JST
 ├── docs/
 │   ├── resume_master.md     # Full resume in markdown (from PDF)
-│   ├── stories_bank.md      # STAR-method narratives (EN + JP)
+│   ├── stories_bank.md      # 6 STAR narratives (EN + JP)
+│   ├── suggestions_from_sumika.md  # Job board sources she suggested
 │   ├── Sumika_Moriwaki_BU_Grad_Resume.pdf
-│   └── sample_cover_letter.txt  # Two sample cover letters
+│   └── sample_cover_letter.txt
 └── prompts/
-    └── tailor_cover_letter.txt  # LLM prompt for cover letter generation
+    ├── tailor_cover_letter.txt   # Cover letter generator prompt
+    ├── linkedin_outreach.txt     # Warm intro messages for Kansai recruiters
+    └── self_pr.txt               # 自己PR generator with anti-self-deprecation guardrails
 ```
 
 ## 5. Discord Setup ("Asago-to-the-Moon" server)
@@ -84,25 +87,78 @@ All three secrets can point to the same webhook during development.
   - `--hype`: Sends a motivational message to `#📍-the-north-star` drawn from her real accomplishments
 - **Alerts:** Discord embeds with Ferrari Score, translated title/snippet, and contextual "Framing Angle"
 
-## 7. Vercel App (planned — not yet built)
+## 7. Vercel App Architecture
 
-Target features:
-- **Job dashboard:** View/filter/sort scraped leads by score, source, status
-- **Application tracker:** Mark jobs as "interested" / "applied" / "rejected" / "blacklisted"
-- **Organization management:** Radar list, blacklist, notes
-- **Keyword search:** Custom keyword entry for manual searches
-- **Story coaching:** STAR method practice tool sourced from stories_bank.md
-- **Hype section:** Motivational content she can visit when she needs it
+### Stack
+- **Framework:** Next.js 14+ (App Router)
+- **Styling:** Tailwind CSS
+- **Database:** Supabase Postgres (project: `sumi-pen`, free tier: 500MB)
+- **Auth:** Simple password gate (single-user tool)
+- **Deployment:** Vercel (auto-deploys on push)
 
-Tech stack TBD — likely Next.js + Vercel KV or similar lightweight persistence.
+### Data flow
+```
+GitHub Actions (cron) → main.py scrapes → writes directly to Supabase Postgres (via supabase-py)
+                                              ↓
+                                     Supabase Postgres (sumi-pen)
+                                              ↓
+                              Next.js App (Vercel) reads + Sumika interacts
+```
+
+### Pages
+| Route | Purpose |
+|---|---|
+| `/` | Dashboard: latest leads sorted by Ferrari Score, quick stats |
+| `/jobs` | Full job list with filters (score, source, status, date) |
+| `/tracker` | Application pipeline: interested → applied → interview → result |
+| `/orgs` | Organization management: radar, blacklist, notes |
+| `/stories` | STAR coaching tool (sourced from stories_bank.md) |
+| `/hype` | Motivational content on demand |
+| `/generate` | Cover letter / Self-PR generator (uses prompts/ + LLM API) |
+
+### Key design decisions
+- **Vercel Postgres over KV:** Need relational queries (filter jobs by score AND status AND source). KV is key-value only.
+- **Scraper writes directly to Supabase:** Using `supabase-py`, the scraper upserts jobs into Postgres. No intermediary API route needed — Supabase's service_role key handles auth.
+- **No SSR for data pages:** Use client-side fetching for dashboard/jobs so the page stays interactive. SSR for static content (stories, hype).
+- **Bilingual UI:** All labels in both EN and JP since Sumika reads both but thinks in Japanese.
+
+### Database schema (Vercel Postgres)
+```sql
+jobs (id, title, link, description, source, score, status, seen_at, translated_title)
+     status: 'new' | 'interested' | 'applied' | 'interview' | 'rejected' | 'blacklisted'
+
+orgs (id, name, url, category, notes)
+     category: 'radar' | 'interested' | 'applied' | 'blacklisted'
+```
 
 ## 8. Content Pipeline
 
-- `docs/resume_master.md` — canonical resume, reframed as "Global Program & Risk Lead"
-- `docs/stories_bank.md` — STAR narratives (currently 2, expand to cover all 4 countries + pandemic pivot)
-- `prompts/` — LLM instructions for tailoring cover letters, Self-PR statements, LinkedIn outreach
+- `docs/resume_master.md` — canonical resume, populated from actual PDF
+- `docs/stories_bank.md` — 6 STAR narratives (EN + JP): Singapore crisis, Himeji diplomacy, pandemic pivot, 7-language newsletter, 1,000-person festival, elementary global awareness
+- `docs/suggestions_from_sumika.md` — job board sources she suggested
+- `prompts/tailor_cover_letter.txt` — cover letter generator
+- `prompts/linkedin_outreach.txt` — warm intro messages for Kansai recruiters (EN + JP)
+- `prompts/self_pr.txt` — 自己PR statement generator with anti-self-deprecation guardrails
 - Target orgs: Sysmex, P&G Japan (Kobe), Nestlé Japan (Kobe), AstraZeneca Osaka, JICA, JETRO, Hyogo Intl Association, international NGOs in Kansai
 
 ## 9. Empathy Guideline
 
 All generated content must emphasize her immense responsibility (4-country safety oversight, 1,000+ participant programs, diplomatic liaison work). Combat the "unemployable" / "overqualified" mindset. She is underdeployed, not underqualified. The right organizations will see that.
+
+## 10. Next Steps (as of 2026-03-16)
+
+### Immediate: Vercel app
+1. Scaffold Next.js app in the repo (App Router + Tailwind)
+2. Set up Vercel Postgres and define schema
+3. Build API route `/api/jobs` for scraper ingestion
+4. Modify `main.py` to POST to Vercel API route (in addition to Discord)
+5. Build pages: dashboard → jobs list → tracker → orgs
+6. Add simple password auth
+7. Deploy and test end-to-end
+
+### After Vercel MVP:
+- Add scrapers for Sumika's suggested sources: CareerCross, WOHL Career, Activo
+- Story coaching page (`/stories`)
+- Cover letter / Self-PR generator page (`/generate`) — requires Claude API key
+- Hype page (`/hype`)
+- Refine Ferrari Score weights based on which jobs she marks "interested"
