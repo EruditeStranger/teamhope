@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/  — commented out: conflicts with web/src/lib/
 lib64/
 parts/
 sdist/
