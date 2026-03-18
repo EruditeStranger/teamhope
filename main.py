@@ -25,6 +25,12 @@ try:
 except ImportError:
     _SUPABASE_AVAILABLE = False
 
+try:
+    import anthropic as _anthropic
+    _ANTHROPIC_AVAILABLE = True
+except ImportError:
+    _ANTHROPIC_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -33,6 +39,7 @@ HEARTBEAT_WEBHOOK_URL = os.getenv("HEARTBEAT_WEBHOOK_URL", WEBHOOK_URL)
 HYPE_WEBHOOK_URL = os.getenv("HYPE_WEBHOOK_URL", WEBHOOK_URL)
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 DB_FILE = "seen_jobs.json"
 TARGETS_FILE = "targets.json"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -130,6 +137,103 @@ def compute_ferrari_score(text: str) -> int:
     return score
 
 
+CANDIDATE_PROFILE = """Sumika Moriwaki — M.A. International Relations (Boston University, Pardee School, 2025).
+B.A. Intercultural Studies. 6.5 years as International Exchange Program Coordinator at Himeji Cultural
+and International Exchange Foundation. Key achievements: 4-country Duty of Care (Belgium, Australia,
+South Korea, Singapore), 11-country program portfolio, 1,000+ annual participants, 50+ volunteer network,
+7-language newsletter, sister-city diplomacy. Certifications: Johns Hopkins International Travel Safety,
+TESOL, Japanese Language Teacher. Languages: Japanese (native), English (advanced).
+Location: Hyogo Prefecture, Japan. Looking for international program management, global operations,
+cross-cultural coordination, or safety/risk management roles. Preferably in Kansai region or remote."""
+
+
+def score_with_llm(job_title: str, job_text: str, feedback_history: str = "") -> tuple[int, str]:
+    """Score a job using Claude Haiku for nuanced relevance assessment.
+
+    Args:
+        job_title: The job listing title.
+        job_text: Full text from the job detail page.
+        feedback_history: Optional string of past thumbs-up/down examples.
+
+    Returns:
+        (score, rationale) — score 1-10, rationale is a one-line explanation.
+        Falls back to (keyword_score, "") if the API call fails.
+    """
+    if not _ANTHROPIC_AVAILABLE or not ANTHROPIC_API_KEY:
+        print("[WARN] Anthropic not configured — falling back to keyword scoring")
+        return compute_ferrari_score(job_text), ""
+
+    prompt = f"""Score this job listing 1-10 for how well it fits the candidate below.
+10 = perfect match (role directly uses her skills). 1 = completely irrelevant.
+
+CANDIDATE:
+{CANDIDATE_PROFILE}
+
+JOB TITLE: {job_title}
+
+JOB DESCRIPTION (first 2000 chars):
+{job_text[:2000]}
+"""
+
+    if feedback_history:
+        prompt += f"""
+FEEDBACK FROM PAST RATINGS (use this to calibrate — she liked some jobs and disliked others):
+{feedback_history}
+"""
+
+    prompt += """
+Respond in EXACTLY this format (nothing else):
+SCORE: <number 1-10>
+RATIONALE: <one sentence explaining why, referencing specific candidate skills or job requirements>"""
+
+    try:
+        client = _anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+
+        # Parse response
+        score_match = re.search(r"SCORE:\s*(\d+)", text)
+        rationale_match = re.search(r"RATIONALE:\s*(.+)", text)
+
+        score = int(score_match.group(1)) if score_match else 5
+        score = max(1, min(10, score))
+        rationale = rationale_match.group(1).strip() if rationale_match else text[:200]
+
+        return score, rationale
+
+    except Exception as e:
+        print(f"[WARN] LLM scoring failed: {e}")
+        return compute_ferrari_score(job_text), ""
+
+
+def fetch_feedback_history() -> str:
+    """Fetch recent feedback from Supabase to include in LLM scoring prompt."""
+    if not _SUPABASE_AVAILABLE or not SUPABASE_URL or not SUPABASE_KEY:
+        return ""
+    try:
+        sb = _create_supabase_client(SUPABASE_URL, SUPABASE_KEY)
+
+        liked = sb.table("jobs").select("title, translated_title, score").eq("feedback", "up").limit(10).execute()
+        disliked = sb.table("jobs").select("title, translated_title, score").eq("feedback", "down").limit(10).execute()
+
+        lines = []
+        for job in (liked.data or []):
+            name = job.get("translated_title") or job["title"]
+            lines.append(f"LIKED: {name} (scored {job['score']})")
+        for job in (disliked.data or []):
+            name = job.get("translated_title") or job["title"]
+            lines.append(f"DISLIKED: {name} (scored {job['score']})")
+
+        return "\n".join(lines) if lines else ""
+    except Exception as e:
+        print(f"[WARN] fetch_feedback_history failed: {e}")
+        return ""
+
+
 def score_emoji(score: int) -> str:
     if score >= 8:
         return "🔥🔥🔥"
@@ -141,6 +245,32 @@ def score_emoji(score: int) -> str:
 
 # ---------------------------------------------------------------------------
 # Scrapers — one per source
+#
+# TEMPLATE for adding a new scraper:
+#
+#   def scrape_<source_name>() -> list[dict]:
+#       """Scrape <Source Name> job listings.
+#
+#       Returns a list of dicts with keys:
+#           title (str): Job title (Japanese or English)
+#           link (str):  Absolute URL to the job detail page
+#           description (str): First ~500 chars of detail page text
+#           source (str): Source name, e.g. "CareerCross"
+#           score (int): Keyword-based Ferrari Score (1-10), pre-LLM
+#           detail_text (str): Full detail page text for LLM scoring
+#
+#       Steps:
+#           1. Paginate through search/listing pages
+#           2. Collect job links (deduplicate by URL)
+#           3. Fetch each detail page
+#           4. Compute keyword score via compute_ferrari_score(detail_text)
+#           5. Return the list — LLM scoring happens in main() for jobs >= 5
+#       """
+#       jobs = []
+#       # ... your scraping logic here ...
+#       return jobs
+#
+#   Then add to SCRAPERS list: SCRAPERS = [..., scrape_<source_name>]
 # ---------------------------------------------------------------------------
 
 def fetch_job_detail(url: str) -> str:
@@ -222,12 +352,15 @@ def scrape_jica_partner() -> list[dict]:
         # Fall back to first 80 chars of card text
         title = card_text[:80].split("必要言語")[0].split("勤務地")[0].strip()
 
+        keyword_score = compute_ferrari_score(detail_text) if detail_text else 1
         jobs.append({
             "title": title,
             "link": href,
             "description": detail_text[:500] if detail_text else "",
             "source": "JICA PARTNER",
-            "score": compute_ferrari_score(detail_text) if detail_text else 1,
+            "score": keyword_score,
+            "detail_text": detail_text,
+            "score_rationale": "",
         })
 
         print(f"[INFO] JICA detail pages: {idx}/{total} fetched")
@@ -426,7 +559,7 @@ def send_hype():
 # ---------------------------------------------------------------------------
 
 def sync_to_supabase(jobs: list[dict]):
-    """Upsert jobs into Supabase Postgres. Skips if not configured."""
+    """Upsert jobs scoring 5+ into Supabase Postgres. Skips if not configured."""
     if not _SUPABASE_AVAILABLE or not SUPABASE_URL or not SUPABASE_KEY:
         print("[INFO] Supabase not configured — skipping DB sync")
         return
@@ -434,9 +567,14 @@ def sync_to_supabase(jobs: list[dict]):
     try:
         sb = _create_supabase_client(SUPABASE_URL, SUPABASE_KEY)
         upserted = 0
+        skipped = 0
         for job in jobs:
-            # Translate title for high-scoring jobs
-            translated = translate_text(job["title"]) if job["score"] >= 5 else ""
+            if job["score"] < 5:
+                skipped += 1
+                continue
+
+            # Translate title for qualifying jobs
+            translated = translate_text(job["title"])
 
             row = {
                 "title": job["title"],
@@ -444,6 +582,7 @@ def sync_to_supabase(jobs: list[dict]):
                 "description": job.get("description", "")[:500],
                 "source": job["source"],
                 "score": job["score"],
+                "score_rationale": job.get("score_rationale", ""),
                 "translated_title": translated if translated != job["title"] else "",
                 "seen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }
@@ -451,7 +590,7 @@ def sync_to_supabase(jobs: list[dict]):
             sb.table("jobs").upsert(row, on_conflict="link").execute()
             upserted += 1
 
-        print(f"[INFO] Supabase sync: {upserted} jobs upserted")
+        print(f"[INFO] Supabase sync: {upserted} jobs upserted, {skipped} below threshold (< 5)")
     except Exception as e:
         print(f"[WARN] Supabase sync failed: {e}")
 
@@ -473,6 +612,20 @@ def main(seed_mode: bool = False):
         except Exception as e:
             stats["errors"] += 1
             print(f"[ERROR] {scraper.__name__}: {e}")
+
+    # --- LLM scoring pass: refine jobs that keyword-scored 5+ ---
+    feedback_history = fetch_feedback_history()
+    llm_candidates = [j for j in all_jobs if j["score"] >= 5]
+    if llm_candidates:
+        print(f"[INFO] LLM scoring {len(llm_candidates)} jobs (keyword score >= 5)...")
+        for idx, job in enumerate(llm_candidates, 1):
+            detail = job.get("detail_text", job.get("description", ""))
+            llm_score, rationale = score_with_llm(job["title"], detail, feedback_history)
+            job["score"] = llm_score
+            job["score_rationale"] = rationale
+            print(f"[INFO] LLM scored {idx}/{len(llm_candidates)}: {llm_score}/10 — {rationale[:80]}")
+    else:
+        print("[INFO] No jobs scored 5+ in keyword pass — skipping LLM scoring")
 
     # Deduplicate, notify new, sort by score (highest first)
     all_jobs.sort(key=lambda j: j["score"], reverse=True)

@@ -135,6 +135,11 @@ export default function Dashboard() {
                       {job.translated_title || job.title}
                     </a>
                     <p className="text-xs text-muted font-light truncate mt-0.5">{job.title}</p>
+                    {job.score_rationale && (
+                      <p className="text-xs text-ink/60 font-light mt-1 italic truncate">
+                        {job.score_rationale}
+                      </p>
+                    )}
                     <div className="flex items-center gap-2 mt-2">
                       <StatusPill status={job.status} />
                       <span className="text-[10px] text-muted font-light">{job.source}</span>

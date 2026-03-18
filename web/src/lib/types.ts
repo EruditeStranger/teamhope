@@ -19,6 +19,8 @@ export interface Job {
   description: string;
   source: string;
   score: number;
+  score_rationale: string;
+  feedback: "up" | "down" | null;
   status: JobStatus;
   translated_title: string;
   seen_at: string;

@@ -49,6 +49,16 @@ export default function JobsPage() {
     );
   }
 
+  async function setFeedback(jobId: number, feedback: "up" | "down" | null) {
+    await supabase
+      .from("jobs")
+      .update({ feedback })
+      .eq("id", jobId);
+    setJobs((prev) =>
+      prev.map((j) => (j.id === jobId ? { ...j, feedback } : j))
+    );
+  }
+
   const scoreColor = (score: number) =>
     score >= 8
       ? "bg-accent-soft text-accent"
@@ -128,6 +138,11 @@ export default function JobsPage() {
                     <span className="text-xs text-muted font-light block truncate mt-0.5">
                       {job.title}
                     </span>
+                    {job.score_rationale && (
+                      <p className="text-xs text-ink/60 font-light mt-1 italic">
+                        {job.score_rationale}
+                      </p>
+                    )}
                     <div className="flex flex-wrap items-center gap-2 mt-2">
                       <select
                         value={job.status}
@@ -142,6 +157,30 @@ export default function JobsPage() {
                       <span className="text-[10px] text-muted font-light shrink-0">
                         {new Date(job.seen_at).toLocaleDateString()}
                       </span>
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button
+                          onClick={() => setFeedback(job.id, job.feedback === "up" ? null : "up")}
+                          className={`text-sm px-1.5 py-0.5 rounded transition-colors ${
+                            job.feedback === "up"
+                              ? "bg-calm-soft text-calm"
+                              : "text-muted hover:text-calm"
+                          }`}
+                          title="Good fit"
+                        >
+                          👍
+                        </button>
+                        <button
+                          onClick={() => setFeedback(job.id, job.feedback === "down" ? null : "down")}
+                          className={`text-sm px-1.5 py-0.5 rounded transition-colors ${
+                            job.feedback === "down"
+                              ? "bg-accent-soft text-accent"
+                              : "text-muted hover:text-accent"
+                          }`}
+                          title="Not a fit"
+                        >
+                          👎
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
