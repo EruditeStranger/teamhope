@@ -1,13 +1,25 @@
 {
   "active_scrapers": [
-    {"name": "JICA PARTNER", "url": "https://partner.jica.go.jp/Recruit/Search", "notes": "Main board, ~309 listings, .for-clawler selector"},
-    {"name": "JETRO", "url": "https://www.jetro.go.jp/jetro/recruit/", "notes": "6 sub-pages, check for active postings"}
+    {"name": "JICA PARTNER", "url": "https://partner.jica.go.jp/Recruit/Search", "notes": "Main board, ~309 listings, two-pass scraping"},
+    {"name": "Activo", "url": "https://activo.jp/job/searchresult?genre[]=1", "notes": "NPO/NGO/international, ~400 listings, genre=1 filter"},
+    {"name": "JICA Volunteer", "url": "https://www.jocv-info.jica.go.jp/jv/?m=BList", "notes": "JOCV positions, ~129 categories, listing-level scraping"}
   ],
   "watch_list": [
     {"name": "Hyogo International Association", "url": "https://www.hyogo-ip.or.jp/", "notes": "No job section currently — check periodically for announcements"},
-    {"name": "JICA Staff Recruitment", "url": "https://www.jica.go.jp/Resource/recruit/shokuin/index.html", "notes": "Portal only, links back to PARTNER for actual listings"}
+    {"name": "JICA Staff Recruitment", "url": "https://www.jica.go.jp/Resource/recruit/shokuin/index.html", "notes": "Portal only, links back to PARTNER for actual listings"},
+    {"name": "JETRO", "url": "https://www.jetro.go.jp/jetro/recruit/", "notes": "Removed from active — timeouts + no active openings"}
   ],
   "future_sources": [
+    {"name": "CareerCross", "url": "https://www.careercross.com/", "notes": "Bilingual job board — high priority for Sumika's profile", "suggested_by": "sumika"},
+    {"name": "Activo", "url": "https://activo.jp/job/searchresult?genre[]=1", "notes": "MOVED TO ACTIVE", "suggested_by": "sumika"},
+    {"name": "JICA Volunteer", "url": "https://www.jocv-info.jica.go.jp/jv/?m=BList", "notes": "MOVED TO ACTIVE", "suggested_by": "sumika"},
+    {"name": "WOHL Career", "url": "https://worholicareer-recruit.com/", "notes": "Working holiday / bilingual careers", "suggested_by": "sumika"},
+    {"name": "転職サイトまとめ", "url": "https://xn--pckua2a7gp15o89zb.com/", "notes": "Job site aggregator", "suggested_by": "sumika"},
+    {"name": "HelloWork", "url": "https://www.hellowork.mhlw.go.jp/kensaku/GECA110010.do?action=initDisp&screenId=GECA110010", "notes": "Government job search portal", "suggested_by": "sumika"},
+    {"name": "ReWork-S", "url": "https://rework-s.com/joblist", "notes": "Remote/flexible work", "suggested_by": "sumika"},
+    {"name": "ReWorker", "url": "https://www.reworker.jp/recruitments/new", "notes": "Remote/flexible work", "suggested_by": "sumika"},
+    {"name": "Mama Works", "url": "https://mamaworks.jp/list", "notes": "Flexible/part-time", "suggested_by": "sumika"},
+    {"name": "Shufu Job (Hyogo)", "url": "https://part.shufu-job.jp/hyogo/", "notes": "Hyogo local listings", "suggested_by": "sumika"},
     {"name": "GaijinPot Jobs", "url": "https://jobs.gaijinpot.com/", "notes": "English-language jobs in Japan"},
     {"name": "Daijob", "url": "https://www.daijob.com/", "notes": "Bilingual job board"},
     {"name": "Indeed Japan", "url": "https://jp.indeed.com/", "notes": "Broad, needs keyword filtering"},

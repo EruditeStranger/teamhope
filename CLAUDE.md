@@ -13,7 +13,8 @@ Stop "plowing a rice field with a Ferrari." Move the search to highways — orga
 - **Academic:** M.A. International Relations, Boston University (Pardee School, 2025); B.A. Intercultural Studies, Yamaguchi Prefectural University
 - **Experience:** 6.5 years as International Exchange Program Coordinator at Himeji Cultural and International Exchange Foundation
 - **Highlights:** 4-country Duty of Care (Belgium, Australia, South Korea, Singapore), 11-country program portfolio, 1,000+ annual participants, 50+ volunteer network, 7-language newsletter, sister-city diplomacy
-- **Certifications:** Johns Hopkins International Travel Safety, TESOL, Japanese Language Teacher, Tea Ceremony Instructor, Goodwill Guide
+- **Certifications:** Johns Hopkins International Travel Safety, TESOL, TEC, Children's English Instructor, Japanese Language Teacher, Plain Japanese Usages, Tea Ceremony Instructor & Advisor, Green Tea Instructor, Japanese Tea Selector, Kimono Dresser Instructor, Kimono Meister, RYT 200 (Yoga), Goodwill Guide
+- **Honors:** Interlocal Human Resource
 - **Languages:** Japanese (native), English (advanced)
 - **Location:** Hyogo Prefecture (Asago/Ikuno), Japan
 
@@ -145,20 +146,32 @@ orgs (id, name, url, category, notes)
 
 All generated content must emphasize her immense responsibility (4-country safety oversight, 1,000+ participant programs, diplomatic liaison work). Combat the "unemployable" / "overqualified" mindset. She is underdeployed, not underqualified. The right organizations will see that.
 
-## 10. Next Steps (as of 2026-03-16)
+## 10. Next Steps (as of 2026-03-18)
 
-### Immediate: Vercel app
-1. Scaffold Next.js app in the repo (App Router + Tailwind)
-2. Set up Vercel Postgres and define schema
-3. Build API route `/api/jobs` for scraper ingestion
-4. Modify `main.py` to POST to Vercel API route (in addition to Discord)
-5. Build pages: dashboard → jobs list → tracker → orgs
-6. Add simple password auth
-7. Deploy and test end-to-end
+### Completed:
+- ✅ Vercel app deployed (Supabase Postgres, ClarityMirror design, responsive/mobile)
+- ✅ Pages: Dashboard, Leads, Pipeline, Organizations, Stories (bilingual), North Star
+- ✅ Hybrid scoring: keyword prefilter → Claude Haiku LLM scoring with rationale
+- ✅ Feedback mechanism: thumbs up/down → feeds into LLM scoring prompt
+- ✅ Only jobs scoring 5+ saved to Supabase
 
-### After Vercel MVP:
-- Add scrapers for Sumika's suggested sources: CareerCross, WOHL Career, Activo
-- Story coaching page (`/stories`)
-- Cover letter / Self-PR generator page (`/generate`) — requires Claude API key
-- Hype page (`/hype`)
-- Refine Ferrari Score weights based on which jobs she marks "interested"
+### Next:
+- Add password auth gate to Vercel app
+- Add scrapers for Sumika's suggested sources (see below)
+- Cover letter / Self-PR generator page (`/generate`) — uses Claude API
+- Refine LLM scoring based on accumulated feedback data
+- Rotate Supabase secret key
+
+### Sumika's suggested job boards (to scrape):
+| Source | URL | Notes |
+|---|---|---|
+| Activo | activo.jp | Genre 1 = international |
+| WOHL Career | worholicareer-recruit.com | Working holiday / bilingual careers |
+| CareerCross | careercross.com | Bilingual job board |
+| 転職サイトまとめ | xn--pckua2a7gp15o89zb.com | Aggregator |
+| HelloWork | hellowork.mhlw.go.jp | Government job search |
+| ReWork-S | rework-s.com | Remote/flexible work |
+| ReWorker | reworker.jp | Remote/flexible work |
+| JICA Volunteer | jocv-info.jica.go.jp | JICA volunteer positions |
+| Mama Works | mamaworks.jp | Flexible/part-time |
+| Shufu Job | part.shufu-job.jp | Hyogo local listings |

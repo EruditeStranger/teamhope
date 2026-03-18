@@ -13,6 +13,11 @@ const HYPE_MESSAGES = [
   { text: "You facilitated cross-cultural programs during a global pandemic. When the whole world stopped, you found a way to keep connecting people. That's leadership.", emoji: "🌟" },
   { text: "Tea ceremony instructor. TESOL certified. Crochet artist. You're not just qualified — you're interesting. The right team will see that.", emoji: "🍵" },
   { text: "好香ちゃん、大丈夫。ボストン大学の修士号を持って、4カ国の安全管理をやり遂げた人が「使えない」わけがない。世界はあなたを必要としている。今日も一歩前へ。", emoji: "🌸" },
+  { text: "Tea Ceremony Instructor. Kimono Meister. Green Tea Instructor. Yoga Teacher. TESOL. That's not a resume — that's a cultural ambassador portfolio. You don't just work across cultures, you embody them.", emoji: "🎎" },
+  { text: "You were honored as an Interlocal Human Resource. That's literally a government recognizing that you are a bridge between worlds. The next employer who says 'overqualified' clearly hasn't read the room.", emoji: "🏅" },
+  { text: "13 certifications. Two degrees. Two continents. Seven languages in one newsletter. You didn't just check boxes — you built a career that most people can't even imagine. The right role is catching up to you.", emoji: "📜" },
+  { text: "Kimono Dresser Instructor + Johns Hopkins Safety Cert. Name one other person on earth with that combination. You're not a generalist — you're uniquely qualified for roles that haven't been invented yet.", emoji: "🌺" },
+  { text: "好香ちゃん、茶道と着物と安全管理とヨガと英語教育。全部できる人なんて世界中探してもほとんどいない。あなたは「何でも屋」じゃない。「何でもできる人」。それは強さ。", emoji: "🌟" },
 ];
 
 export default function HypePage() {

@@ -141,10 +141,14 @@ CANDIDATE_PROFILE = """Sumika Moriwaki — M.A. International Relations (Boston 
 B.A. Intercultural Studies. 6.5 years as International Exchange Program Coordinator at Himeji Cultural
 and International Exchange Foundation. Key achievements: 4-country Duty of Care (Belgium, Australia,
 South Korea, Singapore), 11-country program portfolio, 1,000+ annual participants, 50+ volunteer network,
-7-language newsletter, sister-city diplomacy. Certifications: Johns Hopkins International Travel Safety,
-TESOL, Japanese Language Teacher. Languages: Japanese (native), English (advanced).
+7-language newsletter, sister-city diplomacy. Honored as an Interlocal Human Resource.
+Certifications: Johns Hopkins International Travel Safety, TESOL, TEC, Children's English Instructor,
+Japanese Language Teacher, Plain Japanese Usages, Tea Ceremony Instructor & Advisor, Green Tea Instructor,
+Japanese Tea Selector, Kimono Dresser Instructor, Kimono Meister, RYT 200 (Yoga), Goodwill Guide.
+Languages: Japanese (native), English (advanced).
 Location: Hyogo Prefecture, Japan. Looking for international program management, global operations,
-cross-cultural coordination, or safety/risk management roles. Preferably in Kansai region or remote."""
+cross-cultural coordination, safety/risk management, education, or cultural programming roles.
+Preferably in Kansai region or remote."""
 
 
 def score_with_llm(job_title: str, job_text: str, feedback_history: str = "") -> tuple[int, str]:
@@ -370,9 +374,192 @@ def scrape_jica_partner() -> list[dict]:
     return jobs
 
 
+def scrape_activo() -> list[dict]:
+    """Scrape Activo job listings (genre=1: international/cross-cultural).
+
+    Server-rendered HTML. ~400 listings across ~14 pages (30/page).
+    Job links: a[href*="/job/articles/"]
+    Pagination: ?genre[]=1&page=N (stops when no listings found)
+    Detail pages: /job/articles/{ID}
+    """
+    base_url = "https://activo.jp"
+    collected = []  # list of (title, href)
+    seen_links = set()
+
+    # --- Pass 1: collect links from search pages ---
+    for page in range(1, 20):  # Up to ~14 pages expected, with margin
+        url = f"{base_url}/job/searchresult?genre[]=1&page={page}" if page > 1 else f"{base_url}/job/searchresult?genre[]=1"
+        try:
+            resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+            cards = soup.select("a[href*='/job/articles/']")
+            if not cards:
+                break  # No more results
+
+            for card in cards:
+                href = card.get("href", "")
+                if not re.search(r"/job/articles/\d+", href):
+                    continue
+                if not href.startswith("http"):
+                    href = base_url + href
+                if href in seen_links:
+                    continue
+                seen_links.add(href)
+
+                # Extract title from h3 inside the card
+                h3 = card.select_one("h3")
+                title = h3.get_text(strip=True) if h3 else card.get_text(strip=True)[:100]
+                collected.append((title, href))
+
+            print(f"[INFO] Activo page {page}: found {len(cards)} listings")
+
+        except requests.RequestException as e:
+            print(f"[WARN] Activo page {page} failed: {e}")
+            break
+
+        time.sleep(1)  # Be polite
+
+    total = len(collected)
+    print(f"[INFO] Activo search pages done: {total} listings collected — fetching detail pages...")
+
+    # --- Pass 2: fetch detail pages and score ---
+    jobs = []
+    for idx, (title, href) in enumerate(collected, start=1):
+        detail_text = fetch_job_detail(href)
+
+        keyword_score = compute_ferrari_score(detail_text) if detail_text else 1
+        jobs.append({
+            "title": title,
+            "link": href,
+            "description": detail_text[:500] if detail_text else "",
+            "source": "Activo",
+            "score": keyword_score,
+            "detail_text": detail_text,
+            "score_rationale": "",
+        })
+
+        print(f"[INFO] Activo detail pages: {idx}/{total} fetched (keyword score: {keyword_score})")
+        time.sleep(0.5)  # Be polite
+
+    print(f"[INFO] Activo total: {len(jobs)} listings scored")
+    return jobs
+
+
+def scrape_jica_volunteer() -> list[dict]:
+    """Scrape JICA Volunteer (JOCV) listings from the category browse page.
+
+    Structure: Browse page lists ~129 categories with links → each category
+    has paginated listings with inline details (country, org, requirements).
+    Listing pages contain enough text for scoring without fetching detail pages.
+
+    Only scrapes the active recruitment period (latest Spring/Fall).
+    """
+    base_url = "https://www.jocv-info.jica.go.jp/jv"
+    browse_url = f"{base_url}/?m=BList"
+
+    # --- Step 1: collect all category links from the browse page ---
+    try:
+        resp = requests.get(browse_url, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+    except requests.RequestException as e:
+        print(f"[ERROR] JICA Volunteer browse page failed: {e}")
+        return []
+
+    # Category links look like: ./index.php?m=List&jID=A101&n=y&period=2026%7C%E6%98%A5
+    cat_links = []
+    for a in soup.select("a[href*='m=List']"):
+        href = a.get("href", "")
+        if "jID=" in href and "period=" in href:
+            if not href.startswith("http"):
+                href = f"{base_url}/{href.lstrip('./')}"
+            cat_links.append(href)
+
+    # Deduplicate
+    cat_links = list(dict.fromkeys(cat_links))
+    print(f"[INFO] JICA Volunteer: {len(cat_links)} categories found")
+
+    # --- Step 2: scrape listings from each category (paginated) ---
+    collected = []  # list of dicts
+    seen_links = set()
+
+    for cat_idx, cat_url in enumerate(cat_links, 1):
+        page = 1
+        while True:
+            page_url = cat_url if page == 1 else f"{cat_url}&page={page}"
+            try:
+                resp = requests.get(page_url, headers={"User-Agent": USER_AGENT}, timeout=30)
+                resp.raise_for_status()
+                soup = BeautifulSoup(resp.text, "html.parser")
+            except requests.RequestException as e:
+                print(f"[WARN] JICA Volunteer category page failed: {e}")
+                break
+
+            # Find detail links: ./index.php?m=Info&yID=...
+            detail_links = soup.select("a[href*='m=Info']")
+            if not detail_links:
+                break
+
+            for a in detail_links:
+                href = a.get("href", "")
+                if "yID=" not in href:
+                    continue
+                if not href.startswith("http"):
+                    href = f"{base_url}/{href.lstrip('./')}"
+                if href in seen_links:
+                    continue
+                seen_links.add(href)
+
+                # Get the listing text: walk up to the containing block
+                # The listing page has all info inline — grab surrounding text
+                parent = a.find_parent("div") or a.find_parent("tr") or a.find_parent("td")
+                if parent:
+                    listing_text = parent.get_text(separator=" ", strip=True)
+                else:
+                    listing_text = ""
+
+                # Extract a title from the listing text (country + job type)
+                yid_match = re.search(r"yID=([A-Z0-9]+)", href)
+                yid = yid_match.group(1) if yid_match else ""
+
+                # Try to extract country and job type from the text
+                title = listing_text[:120] if listing_text else f"JOCV Position {yid}"
+
+                keyword_score = compute_ferrari_score(listing_text) if listing_text else 1
+                collected.append({
+                    "title": title,
+                    "link": href,
+                    "description": listing_text[:500] if listing_text else "",
+                    "source": "JICA Volunteer",
+                    "score": keyword_score,
+                    "detail_text": listing_text,
+                    "score_rationale": "",
+                })
+
+            # Check for next page
+            next_link = soup.select_one("a[href*='page=']")
+            current_page_text = soup.get_text()
+            if f"{page + 1}ページ" in current_page_text or soup.select_one(f"a[href*='page={page + 1}']"):
+                page += 1
+                time.sleep(0.5)
+            else:
+                break
+
+        if cat_idx % 20 == 0:
+            print(f"[INFO] JICA Volunteer: {cat_idx}/{len(cat_links)} categories scraped, {len(collected)} listings so far")
+        time.sleep(0.3)  # Be polite between categories
+
+    print(f"[INFO] JICA Volunteer total: {len(collected)} listings scored")
+    return collected
+
+
 # Registry of all scrapers
 SCRAPERS = [
     scrape_jica_partner,
+    scrape_activo,
+    scrape_jica_volunteer,
 ]
 
 
@@ -457,6 +644,12 @@ def suggest_framing(job: dict) -> str:
         angles.append("50+ volunteer network management & 7-language newsletter")
     if any(kw in text for kw in ["英語", "english", "bilingual", "通訳", "翻訳"]):
         angles.append("Native JP + Advanced EN, TESOL certified")
+    if any(kw in text for kw in ["教育", "教員", "teacher", "teaching", "instructor", "子ども", "children"]):
+        angles.append("TESOL + TEC + Children's English Instructor certifications")
+    if any(kw in text for kw in ["文化", "culture", "tea", "茶", "着物", "kimono", "伝統", "tradition"]):
+        angles.append("Tea Ceremony Instructor, Kimono Meister — deep cultural expertise")
+    if any(kw in text for kw in ["yoga", "ヨガ", "wellness", "健康"]):
+        angles.append("RYT 200 certified yoga teacher")
 
     if not angles:
         angles.append("Frame as 'International Ops & Cross-Cultural Program Management'")
@@ -528,6 +721,11 @@ HYPE_MESSAGES = [
     "**You facilitated cross-cultural programs during a global pandemic.** When the whole world stopped, you found a way to keep connecting people. That's leadership. 🌟",
     "**Tea ceremony instructor. TESOL certified. Crochet artist.** You're not just qualified — you're interesting. The right team will see that. 🍵",
     "**好香ちゃん、大丈夫。ボストン大学の修士号を持って、4カ国の安全管理をやり遂げた人が「使えない」わけがない。世界はあなたを必要としている。今日も一歩前へ。** 🌸",
+    "**Tea Ceremony Instructor. Kimono Meister. Green Tea Instructor. Yoga Teacher. TESOL.** That's a highly sophisticated cultural ambassador portfolio. You don't just work across cultures, you *embody* them. 🎎",
+    "**You were honored as an Interlocal Human Resource.** That's literally a government recognizing that you are a bridge between worlds. Any employer who doesn't see that clearly hasn't read the room. 🏅",
+    "**13 certifications. Two degrees. Two continents. Seven languages in one newsletter.** You didn't just check boxes — you built a career that most people can't even imagine. The right role is catching up to you. 📜",
+    "**Kimono Dresser Instructor + Johns Hopkins Safety Cert.** Name one other person on earth with that combination. You're not a generalist — you're *uniquely qualified* for roles that haven't been invented yet. 🌺",
+    "**好香ちゃん、茶道と着物と安全管理とヨガと英語教育。全部できる人なんて世界中探してもほとんどいない。あなたは「何でも屋」じゃない。「何でもできる人」。それは強さ。** 🌟",
 ]
 
 
@@ -544,7 +742,7 @@ def send_hype():
             "title": "🌟 Gambatte from Sumi-Pen",
             "description": message,
             "color": 0xFFD700,
-            "footer": {"text": "You've got this — Project Asago-to-the-Moon 🚀"},
+            "footer": {"text": "Dekiru! Fighto!"},
         }]
     }
 

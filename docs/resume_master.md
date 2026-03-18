@@ -97,5 +97,21 @@ Boston University International Affairs Association | February 2025
 
 **Teaching & Cultural Education:**
 - TESOL Certification (Concordia International College, Canada)
+- TEC (Teaching English for Children) Certification
+- Certified Children's English Instructor
 - Japanese Language Teacher Certification
-- Tea Ceremony Instructor & Cultural Programming Certifications
+- Certified Plain Japanese Usages
+
+**Cultural Arts & Traditional Skills:**
+- Certified Tea Ceremony Instructor
+- Certified Tea Ceremony Advisor
+- Certified Green Tea Instructor
+- Certified Japanese Tea Selector
+- Certified Kimono Dresser Instructor
+- Certified Kimono Meister
+
+**Wellness & Lifestyle:**
+- Certified RYT (Registered Yoga Teacher) 200
+
+**Honors:**
+- Honored as an Interlocal Human Resource
