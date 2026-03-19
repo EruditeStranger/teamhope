@@ -130,8 +130,10 @@ GitHub Actions (cron) → main.py scrapes → writes directly to Supabase Postgr
 
 ### Database schema (Vercel Postgres)
 ```sql
-jobs (id, title, link, description, source, score, status, seen_at, translated_title)
+jobs (id, title, link, description, source, score, score_rationale, status, seen_at, translated_title, feedback, feedback_note, updated_at)
      status: 'new' | 'interested' | 'applied' | 'interview' | 'rejected' | 'blacklisted'
+     feedback: 'up' | 'down' | null
+     feedback_note: text | null  -- optional reason, included in LLM scoring prompt
 
 orgs (id, name, url, category, notes)
      category: 'radar' | 'interested' | 'applied' | 'blacklisted'

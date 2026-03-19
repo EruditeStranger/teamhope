@@ -3,36 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Job } from "@/lib/types";
-
-function ScoreBadge({ score }: { score: number }) {
-  const color =
-    score >= 8
-      ? "bg-accent-soft text-accent"
-      : score >= 5
-        ? "bg-caution-soft text-caution"
-        : "bg-calm-soft text-calm";
-  return (
-    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium ${color}`}>
-      {score}/10
-    </span>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    new: "bg-calm-soft text-calm",
-    interested: "bg-caution-soft text-caution",
-    applied: "bg-calm text-white",
-    interview: "bg-caution text-white",
-    rejected: "bg-ink/5 text-muted",
-    blacklisted: "bg-accent-soft text-accent",
-  };
-  return (
-    <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium uppercase tracking-wider ${colors[status] || colors.new}`}>
-      {status}
-    </span>
-  );
-}
+import JobCard from "@/app/components/JobCard";
 
 export default function Dashboard() {
   const [topJobs, setTopJobs] = useState<Job[]>([]);
@@ -119,34 +90,14 @@ export default function Dashboard() {
             </div>
           ) : (
             topJobs.map((job) => (
-              <div
+              <JobCard
                 key={job.id}
-                className="bg-white border border-border rounded-lg p-4 card-hover"
-              >
-                <div className="flex items-start gap-3">
-                  <ScoreBadge score={job.score} />
-                  <div className="flex-1 min-w-0">
-                    <a
-                      href={job.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-normal hover:text-calm transition-colors block truncate"
-                    >
-                      {job.translated_title || job.title}
-                    </a>
-                    <p className="text-xs text-muted font-light truncate mt-0.5">{job.title}</p>
-                    {job.score_rationale && (
-                      <p className="text-xs text-ink/60 font-light mt-1 italic truncate">
-                        {job.score_rationale}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2">
-                      <StatusPill status={job.status} />
-                      <span className="text-[10px] text-muted font-light">{job.source}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                job={job}
+                onUpdate={(updated) =>
+                  setTopJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)))
+                }
+                showStatus={false}
+              />
             ))
           )}
         </div>

@@ -131,12 +131,36 @@ const STAR_LABELS = {
 };
 
 type Lang = "en" | "jp";
+type PageMode = "star" | "intro";
+
+const SELF_INTROS = {
+  short: {
+    label: { en: "Quick / 30 sec", jp: "短め・30秒" },
+    en: "My name is Sumika Moriwaki. I'm an international program leader with six and a half years of experience managing large-scale exchange operations across eleven countries, and a Master's in International Relations from Boston University. I'm looking for a role where I can put that operational and cross-cultural expertise to work. Thank you for your time today.",
+    jp: "森脇好香と申します。本日はよろしくお願いいたします。\n姫路市の国際交流財団にて6年半にわたり、11カ国を対象とした国際交流事業の企画・運営を統括してまいりました。現在は、その経験を活かせる国際業務のポジションを探しております。\nどうぞよろしくお願いいたします。",
+  },
+  standard: {
+    label: { en: "Standard / 1 min", jp: "標準・1分" },
+    en: "My name is Sumika Moriwaki. For six and a half years, I led international exchange programs at the Himeji Cultural and International Exchange Foundation — managing an eleven-country portfolio, coordinating over a thousand participants annually, and building a volunteer network of more than fifty people.\n\nI didn't just run logistics. I managed end-to-end Duty of Care for youth delegations traveling to four countries, published a seven-language community newsletter, and served as a diplomatic liaison for Himeji's sister-city relationships.\n\nLast year I completed my Master's in International Relations at Boston University's Pardee School, because I wanted the analytical framework to match my operational experience. Now I'm back in Kansai and looking for a role where both of those dimensions — the hands-on leadership and the strategic thinking — come together.\n\nThank you for the opportunity to speak with you today.",
+    jp: "森脇好香と申します。本日はよろしくお願いいたします。\n私は姫路市の国際交流財団にて6年半、国際交流事業の企画・運営に携わってまいりました。11カ国を対象としたプログラムの統括、年間1,000名を超える参加者の対応、50名以上のボランティアネットワークの構築と運営を担当し、姉妹都市外交の実務にも深く関わってまいりました。\n\n特に、ベルギー・オーストラリア・韓国・シンガポールの4カ国への青少年派遣では、安全管理の全責任を担い、危機対応を含むデューティ・オブ・ケアを遂行いたしました。\n\nこれらの実務経験をさらに深めたいと考え、昨年、ボストン大学パーディースクールにて国際関係学の修士号を取得いたしました。現場での実践力と、大学院で培った分析的な視点の両方を活かせるポジションを探しております。\n\n本日はどうぞよろしくお願いいたします。",
+  },
+  global: {
+    label: { en: "Global focus / 1.5 min", jp: "グローバル重視・1分半" },
+    en: "My name is Sumika Moriwaki. I'm an international operations professional with six and a half years of hands-on program leadership and a Master's in International Relations from Boston University.\n\nAt the Himeji Cultural and International Exchange Foundation, I managed a portfolio spanning eleven countries — from Belgium and Australia to South Korea and Singapore. I coordinated over a thousand participants annually, led a network of fifty-plus volunteers, and produced a seven-language newsletter reaching Himeji's entire international resident community.\n\nOne of the areas I'm most proud of is safety management. I held end-to-end responsibility for Duty of Care across four countries — not in a supervisory sense, but as the person making real-time risk decisions, managing crisis protocols, and ensuring every participant came home safe. That experience led me to earn the Johns Hopkins International Travel Safety certification.\n\nI pursued my M.A. at Boston University specifically to build the policy analysis and research skills that would complement my operational background. I wanted to be someone who can both design a program and assess its strategic impact.\n\nI also hold certifications in tea ceremony instruction, kimono arts, and Japanese language teaching — skills I've used professionally in cultural diplomacy contexts.\n\nI'm now seeking a role in international program management, global operations, or cross-cultural coordination — ideally with an organization that values both execution capability and cultural depth. Thank you very much for your time today.",
+    jp: "森脇好香と申します。本日はよろしくお願いいたします。\n私は姫路市の国際交流財団にて6年半にわたり、国際交流事業全般の企画・運営を統括してまいりました。ベルギー、オーストラリア、韓国、シンガポールをはじめとする11カ国を対象としたプログラムを担当し、年間1,000名以上の参加者対応、50名以上のボランティアの統括、そして7言語での地域ニュースレターの制作を行ってまいりました。\n\n中でも力を入れてきたのが、海外派遣における安全管理です。4カ国への青少年派遣事業において、リスク評価から緊急時対応まで、デューティ・オブ・ケアの全工程を担いました。この経験を体系化するために、ジョンズ・ホプキンス大学の国際渡航安全プログラムも修了しております。\n\nまた、現場での経験を政策的・分析的な視点から深めたいと考え、昨年ボストン大学パーディースクールにて国際関係学の修士号を取得いたしました。現場のオペレーション力と、学術的な分析力の両方を備えた人材でありたいと考えております。\n\nなお、茶道や着物、日本語教育の資格も保有しており、これらは文化外交の現場で実際に活用してきたスキルでもございます。\n\n現在は、国際事業の企画・運営、グローバルオペレーション、または異文化間の調整業務に携われるポジションを探しております。実行力と文化的な深みの両方を重視してくださる組織で、お力になれればと考えております。\n\n本日はどうぞよろしくお願いいたします。",
+  },
+} as const;
+
+type IntroKey = keyof typeof SELF_INTROS;
 
 export default function StoriesPage() {
+  const [pageMode, setPageMode] = useState<PageMode>("star");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [practiceMode, setPracticeMode] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
   const [revealedParts, setRevealedParts] = useState<Set<string>>(new Set());
+  const [activeIntro, setActiveIntro] = useState<IntroKey>("standard");
+  const [copied, setCopied] = useState(false);
 
   function toggleReveal(key: string) {
     setRevealedParts((prev) => {
@@ -147,11 +171,20 @@ export default function StoriesPage() {
     });
   }
 
+  function copyIntro() {
+    const text = SELF_INTROS[activeIntro][lang];
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   const labels = STAR_LABELS[lang];
 
   return (
     <div className="max-w-3xl animate-fade-up">
-      <div className="flex items-start justify-between mb-10">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-8">
         <div>
           <h2 className="font-serif text-4xl font-light tracking-tight mb-1">
             {lang === "en" ? "Story Coach" : "ストーリー練習"}
@@ -162,121 +195,189 @@ export default function StoriesPage() {
               : "Story Coach — STARメソッドで面接準備"}
           </p>
         </div>
-        <div className="flex gap-2">
-          {/* Language toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            <button
-              onClick={() => { setLang("en"); setRevealedParts(new Set()); }}
-              className={`px-4 py-2.5 text-sm font-light transition-colors ${
-                lang === "en"
-                  ? "bg-ink text-paper"
-                  : "bg-white text-muted hover:bg-paper-warm"
-              }`}
-            >
-              EN
-            </button>
-            <button
-              onClick={() => { setLang("jp"); setRevealedParts(new Set()); }}
-              className={`px-4 py-2.5 text-sm font-light transition-colors ${
-                lang === "jp"
-                  ? "bg-ink text-paper"
-                  : "bg-white text-muted hover:bg-paper-warm"
-              }`}
-            >
-              JP
-            </button>
-          </div>
 
-          {/* Practice mode toggle */}
+        {/* Language toggle */}
+        <div className="flex rounded-lg border border-border overflow-hidden">
           <button
-            onClick={() => { setPracticeMode(!practiceMode); setRevealedParts(new Set()); }}
-            className={`px-5 py-2.5 text-sm rounded-lg transition-colors font-light ${
-              practiceMode
-                ? "bg-caution text-white"
-                : "bg-ink text-paper hover:bg-ink/80"
+            onClick={() => { setLang("en"); setRevealedParts(new Set()); }}
+            className={`px-4 py-2.5 text-sm font-light transition-colors ${
+              lang === "en" ? "bg-ink text-paper" : "bg-white text-muted hover:bg-paper-warm"
             }`}
           >
-            {practiceMode
-              ? (lang === "en" ? "Exit Practice" : "終了")
-              : (lang === "en" ? "Practice" : "練習モード")}
+            EN
+          </button>
+          <button
+            onClick={() => { setLang("jp"); setRevealedParts(new Set()); }}
+            className={`px-4 py-2.5 text-sm font-light transition-colors ${
+              lang === "jp" ? "bg-ink text-paper" : "bg-white text-muted hover:bg-paper-warm"
+            }`}
+          >
+            JP
           </button>
         </div>
       </div>
 
-      {practiceMode && (
-        <div className="bg-caution-soft border border-caution/20 rounded-lg p-5 mb-8 text-sm font-light animate-fade-up">
-          {lang === "en" ? (
-            <>Click each S / T / A / R part to reveal it. Try to recall from memory first.<br />
-            <span className="text-muted text-xs">各パートをクリックして表示。まず記憶から思い出してみてください。</span></>
-          ) : (
-            <>各パート（状況・課題・行動・結果）をクリックして表示します。まず自分の言葉で思い出してから確認しましょう。<br />
-            <span className="text-muted text-xs">Click each part to reveal. Try to recall from memory first.</span></>
+      {/* Mode tabs */}
+      <div className="flex gap-1 mb-8">
+        <button
+          onClick={() => setPageMode("star")}
+          className={`px-5 py-2.5 text-sm rounded-lg font-light transition-colors ${
+            pageMode === "star" ? "bg-ink text-paper" : "bg-white border border-border text-muted hover:text-ink"
+          }`}
+        >
+          {lang === "en" ? "STAR Stories" : "STARストーリー"}
+        </button>
+        <button
+          onClick={() => setPageMode("intro")}
+          className={`px-5 py-2.5 text-sm rounded-lg font-light transition-colors ${
+            pageMode === "intro" ? "bg-ink text-paper" : "bg-white border border-border text-muted hover:text-ink"
+          }`}
+        >
+          {lang === "en" ? "Self Introduction" : "自己紹介"}
+        </button>
+      </div>
+
+      {/* ── STAR Stories ── */}
+      {pageMode === "star" && (
+        <>
+          <div className="flex justify-end mb-6">
+            <button
+              onClick={() => { setPracticeMode(!practiceMode); setRevealedParts(new Set()); }}
+              className={`px-5 py-2.5 text-sm rounded-lg transition-colors font-light ${
+                practiceMode ? "bg-caution text-white" : "bg-white border border-border text-muted hover:text-ink"
+              }`}
+            >
+              {practiceMode
+                ? (lang === "en" ? "Exit Practice" : "終了")
+                : (lang === "en" ? "Practice Mode" : "練習モード")}
+            </button>
+          </div>
+
+          {practiceMode && (
+            <div className="bg-caution-soft border border-caution/20 rounded-lg p-5 mb-6 text-sm font-light animate-fade-up">
+              {lang === "en" ? (
+                <>Click each S / T / A / R part to reveal it. Try to recall from memory first.<br />
+                <span className="text-muted text-xs">各パートをクリックして表示。まず記憶から思い出してみてください。</span></>
+              ) : (
+                <>各パート（状況・課題・行動・結果）をクリックして表示します。まず自分の言葉で思い出してから確認しましょう。<br />
+                <span className="text-muted text-xs">Click each part to reveal. Try to recall from memory first.</span></>
+              )}
+            </div>
           )}
-        </div>
+
+          <div className="space-y-3 animate-fade-up delay-1">
+            {STORIES.map((story, idx) => (
+              <div key={idx} className="bg-white border border-border rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setExpanded(expanded === idx ? null : idx)}
+                  className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-paper transition-colors"
+                >
+                  <div>
+                    <span className="font-serif text-lg font-light">
+                      {lang === "en" ? story.title : story.titleJp}
+                    </span>
+                    <span className="text-xs text-muted ml-3">
+                      {lang === "en" ? story.titleJp : story.title}
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {story.tags.map((tag) => (
+                      <span key={tag} className="text-[10px] px-2.5 py-1 bg-paper-warm rounded-full text-muted font-light">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </button>
+
+                {expanded === idx && (
+                  <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
+                    {(["situation", "task", "action", "result"] as const).map((part) => {
+                      const key = `${idx}-${part}-${lang}`;
+                      const isRevealed = !practiceMode || revealedParts.has(key);
+                      const meta = labels[part];
+                      const content = story[lang][part];
+                      return (
+                        <div
+                          key={part}
+                          className={`flex items-start gap-3 ${practiceMode ? "cursor-pointer" : ""}`}
+                          onClick={() => practiceMode && toggleReveal(key)}
+                        >
+                          <div className="w-14 shrink-0 pt-0.5">
+                            <span className={`label-caps ${meta.color}`}>{meta.letter}</span>
+                            <span className="text-[9px] text-muted block">{meta.label}</span>
+                          </div>
+                          <p className={`text-sm font-light leading-relaxed transition-all duration-300 ${
+                            isRevealed ? "" : "blur-sm select-none"
+                          }`}>
+                            {content}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      <div className="space-y-3 animate-fade-up delay-1">
-        {STORIES.map((story, idx) => (
-          <div
-            key={idx}
-            className="bg-white border border-border rounded-lg overflow-hidden"
-          >
-            <button
-              onClick={() => setExpanded(expanded === idx ? null : idx)}
-              className="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-paper transition-colors"
-            >
-              <div>
-                <span className="font-serif text-lg font-light">
-                  {lang === "en" ? story.title : story.titleJp}
-                </span>
-                <span className="text-xs text-muted ml-3">
-                  {lang === "en" ? story.titleJp : story.title}
-                </span>
-              </div>
-              <div className="flex gap-1.5">
-                {story.tags.map((tag) => (
-                  <span key={tag} className="text-[10px] px-2.5 py-1 bg-paper-warm rounded-full text-muted font-light">
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            </button>
-
-            {expanded === idx && (
-              <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
-                {(["situation", "task", "action", "result"] as const).map((part) => {
-                  const key = `${idx}-${part}-${lang}`;
-                  const isRevealed = !practiceMode || revealedParts.has(key);
-                  const meta = labels[part];
-                  const content = story[lang][part];
-
-                  return (
-                    <div
-                      key={part}
-                      className={`flex items-start gap-3 ${practiceMode ? "cursor-pointer" : ""}`}
-                      onClick={() => practiceMode && toggleReveal(key)}
-                    >
-                      <div className="w-14 shrink-0 pt-0.5">
-                        <span className={`label-caps ${meta.color}`}>
-                          {meta.letter}
-                        </span>
-                        <span className="text-[9px] text-muted block">
-                          {meta.label}
-                        </span>
-                      </div>
-                      <p className={`text-sm font-light leading-relaxed transition-all duration-300 ${
-                        isRevealed ? "" : "blur-sm select-none"
-                      }`}>
-                        {content}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
+      {/* ── Self Introduction ── */}
+      {pageMode === "intro" && (
+        <div className="animate-fade-up">
+          <div className="bg-calm-soft border border-calm/20 rounded-lg p-5 mb-8 text-sm font-light">
+            {lang === "en" ? (
+              <>These are <strong className="font-medium">starting points, not scripts</strong> — adapt them to fit your voice and the specific role. Use whichever length feels right for the moment.<br />
+              <span className="text-muted text-xs mt-1 block">これらはあくまでインスピレーションです。自分の言葉でアレンジしてください。</span></>
+            ) : (
+              <>これらは<strong className="font-medium">インスピレーションのためのサンプル</strong>です。そのまま暗記するのではなく、自分の言葉でアレンジして使ってください。<br />
+              <span className="text-muted text-xs mt-1 block">These are starting points — adapt them to fit your voice and the specific role.</span></>
             )}
           </div>
-        ))}
-      </div>
+
+          {/* Length selector */}
+          <div className="flex gap-1 mb-6">
+            {(Object.keys(SELF_INTROS) as IntroKey[]).map((key) => (
+              <button
+                key={key}
+                onClick={() => setActiveIntro(key)}
+                className={`px-4 py-2 text-xs rounded-lg font-light transition-colors ${
+                  activeIntro === key
+                    ? "bg-calm text-white"
+                    : "bg-white border border-border text-muted hover:text-ink"
+                }`}
+              >
+                {SELF_INTROS[key].label[lang]}
+              </button>
+            ))}
+          </div>
+
+          {/* Script display */}
+          <div className="bg-white border border-border rounded-lg p-6">
+            <div className="flex items-center justify-between mb-5">
+              <span className="label-caps">{SELF_INTROS[activeIntro].label[lang]}</span>
+              <button
+                onClick={copyIntro}
+                className="text-xs text-muted hover:text-ink transition-colors font-light flex items-center gap-1.5"
+              >
+                {copied ? (lang === "en" ? "Copied ✓" : "コピー済 ✓") : (lang === "en" ? "Copy" : "コピー")}
+              </button>
+            </div>
+            <div className="space-y-4">
+              {SELF_INTROS[activeIntro][lang].split("\n\n").map((para, i) => (
+                <p key={i} className="text-sm font-light leading-relaxed text-ink">
+                  {para.split("\n").map((line, j) => (
+                    <span key={j}>
+                      {line}
+                      {j < para.split("\n").length - 1 && <br />}
+                    </span>
+                  ))}
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

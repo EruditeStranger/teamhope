@@ -21,10 +21,13 @@ export interface Job {
   score: number;
   score_rationale: string;
   feedback: "up" | "down" | null;
+  feedback_note: string | null;
   status: JobStatus;
   translated_title: string;
   seen_at: string;
   updated_at: string;
+  posted_at: string | null;
+  deadline: string | null;
 }
 
 export interface Org {

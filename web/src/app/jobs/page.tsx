@@ -3,25 +3,46 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Job, JobStatus } from "@/lib/types";
+import JobCard from "@/app/components/JobCard";
 
 const STATUS_OPTIONS: JobStatus[] = ["new", "interested", "applied", "interview", "rejected", "blacklisted"];
+
+type FeedbackFilter = "all" | "up" | "down" | "none";
+
+const FEEDBACK_TABS: { value: FeedbackFilter; label: string }[] = [
+  { value: "all",  label: "All" },
+  { value: "up",   label: "👍 Liked" },
+  { value: "down", label: "👎 Disliked" },
+  { value: "none", label: "Unrated" },
+];
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterMinScore, setFilterMinScore] = useState<number>(1);
+  const [filterFeedback, setFilterFeedback] = useState<FeedbackFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"score" | "deadline" | "posted_at" | "seen_at">("score");
 
   const loadJobs = useCallback(async () => {
+    const ascending = sortBy === "deadline";
     let query = supabase
       .from("jobs")
       .select("*")
       .gte("score", filterMinScore)
-      .order("score", { ascending: false });
+      .order(sortBy, { ascending, nullsFirst: false });
 
     if (filterStatus !== "all") {
       query = query.eq("status", filterStatus);
+    }
+
+    if (filterFeedback === "up") {
+      query = query.eq("feedback", "up");
+    } else if (filterFeedback === "down") {
+      query = query.eq("feedback", "down");
+    } else if (filterFeedback === "none") {
+      query = query.is("feedback", null);
     }
 
     if (searchQuery.trim()) {
@@ -33,43 +54,37 @@ export default function JobsPage() {
     const { data } = await query.limit(100);
     setJobs(data || []);
     setLoading(false);
-  }, [filterStatus, filterMinScore, searchQuery]);
+  }, [filterStatus, filterMinScore, filterFeedback, searchQuery, sortBy]);
 
   useEffect(() => {
     loadJobs();
   }, [loadJobs]);
 
-  async function updateStatus(jobId: number, newStatus: JobStatus) {
-    await supabase
-      .from("jobs")
-      .update({ status: newStatus, updated_at: new Date().toISOString() })
-      .eq("id", jobId);
-    setJobs((prev) =>
-      prev.map((j) => (j.id === jobId ? { ...j, status: newStatus } : j))
-    );
+  function updateJob(updated: Job) {
+    setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
   }
-
-  async function setFeedback(jobId: number, feedback: "up" | "down" | null) {
-    await supabase
-      .from("jobs")
-      .update({ feedback })
-      .eq("id", jobId);
-    setJobs((prev) =>
-      prev.map((j) => (j.id === jobId ? { ...j, feedback } : j))
-    );
-  }
-
-  const scoreColor = (score: number) =>
-    score >= 8
-      ? "bg-accent-soft text-accent"
-      : score >= 5
-        ? "bg-caution-soft text-caution"
-        : "bg-calm-soft text-calm";
 
   return (
     <div className="animate-fade-up">
       <h2 className="font-serif text-4xl font-light tracking-tight mb-1">Leads</h2>
       <p className="text-sm text-muted font-light mb-10">求人一覧 — Browse and filter all listings</p>
+
+      {/* Feedback tabs */}
+      <div className="flex gap-1 mb-6 animate-fade-up delay-1">
+        {FEEDBACK_TABS.map((tab) => (
+          <button
+            key={tab.value}
+            onClick={() => setFilterFeedback(tab.value)}
+            className={`px-4 py-2 text-xs rounded-lg font-light transition-colors ${
+              filterFeedback === tab.value
+                ? "bg-ink text-paper"
+                : "bg-white border border-border text-muted hover:text-ink"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 mb-8 animate-fade-up delay-1">
@@ -90,6 +105,17 @@ export default function JobsPage() {
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
+        </select>
+
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="px-4 py-3 text-sm font-light border border-border rounded-lg bg-white focus:outline-none focus:border-calm"
+        >
+          <option value="score">Sort: Score ↓</option>
+          <option value="deadline">Sort: Deadline (soonest)</option>
+          <option value="posted_at">Sort: Posted (newest)</option>
+          <option value="seen_at">Sort: Seen (newest)</option>
         </select>
 
         <div className="flex items-center gap-3 bg-white border border-border rounded-lg px-4 py-2">
@@ -117,74 +143,7 @@ export default function JobsPage() {
             </div>
           ) : (
             jobs.map((job) => (
-              <div
-                key={job.id}
-                className="bg-white border border-border rounded-lg p-4 card-hover"
-              >
-                <div className="flex items-start gap-3">
-                  <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium shrink-0 ${scoreColor(job.score)}`}>
-                    {job.score}/10
-                  </span>
-
-                  <div className="flex-1 min-w-0">
-                    <a
-                      href={job.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-normal hover:text-calm transition-colors block truncate"
-                    >
-                      {job.translated_title || job.title}
-                    </a>
-                    <span className="text-xs text-muted font-light block truncate mt-0.5">
-                      {job.title}
-                    </span>
-                    {job.score_rationale && (
-                      <p className="text-xs text-ink/60 font-light mt-1 italic">
-                        {job.score_rationale}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap items-center gap-2 mt-2">
-                      <select
-                        value={job.status}
-                        onChange={(e) => updateStatus(job.id, e.target.value as JobStatus)}
-                        className="text-xs px-3 py-1.5 rounded-full border border-border bg-white cursor-pointer font-light focus:outline-none focus:border-calm"
-                      >
-                        {STATUS_OPTIONS.map((s) => (
-                          <option key={s} value={s}>{s}</option>
-                        ))}
-                      </select>
-                      <span className="text-[10px] text-muted shrink-0">{job.source}</span>
-                      <span className="text-[10px] text-muted font-light shrink-0">
-                        {new Date(job.seen_at).toLocaleDateString()}
-                      </span>
-                      <div className="flex items-center gap-1 ml-auto">
-                        <button
-                          onClick={() => setFeedback(job.id, job.feedback === "up" ? null : "up")}
-                          className={`text-sm px-1.5 py-0.5 rounded transition-colors ${
-                            job.feedback === "up"
-                              ? "bg-calm-soft text-calm"
-                              : "text-muted hover:text-calm"
-                          }`}
-                          title="Good fit"
-                        >
-                          👍
-                        </button>
-                        <button
-                          onClick={() => setFeedback(job.id, job.feedback === "down" ? null : "down")}
-                          className={`text-sm px-1.5 py-0.5 rounded transition-colors ${
-                            job.feedback === "down"
-                              ? "bg-accent-soft text-accent"
-                              : "text-muted hover:text-accent"
-                          }`}
-                          title="Not a fit"
-                        >
-                          👎
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <JobCard key={job.id} job={job} onUpdate={updateJob} />
             ))
           )}
         </div>

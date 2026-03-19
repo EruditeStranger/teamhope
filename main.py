@@ -181,7 +181,8 @@ JOB DESCRIPTION (first 2000 chars):
 
     if feedback_history:
         prompt += f"""
-FEEDBACK FROM PAST RATINGS (use this to calibrate — she liked some jobs and disliked others):
+FEEDBACK FROM PAST RATINGS (use this to calibrate — she liked some jobs and disliked others).
+Reasons may be written in Japanese — interpret them as-is:
 {feedback_history}
 """
 
@@ -221,16 +222,22 @@ def fetch_feedback_history() -> str:
     try:
         sb = _create_supabase_client(SUPABASE_URL, SUPABASE_KEY)
 
-        liked = sb.table("jobs").select("title, translated_title, score").eq("feedback", "up").limit(10).execute()
-        disliked = sb.table("jobs").select("title, translated_title, score").eq("feedback", "down").limit(10).execute()
+        liked = sb.table("jobs").select("title, translated_title, score, feedback_note").eq("feedback", "up").limit(10).execute()
+        disliked = sb.table("jobs").select("title, translated_title, score, feedback_note").eq("feedback", "down").limit(10).execute()
 
         lines = []
         for job in (liked.data or []):
             name = job.get("translated_title") or job["title"]
-            lines.append(f"LIKED: {name} (scored {job['score']})")
+            line = f"LIKED: {name} (scored {job['score']})"
+            if job.get("feedback_note"):
+                line += f" — reason: {job['feedback_note']}"
+            lines.append(line)
         for job in (disliked.data or []):
             name = job.get("translated_title") or job["title"]
-            lines.append(f"DISLIKED: {name} (scored {job['score']})")
+            line = f"DISLIKED: {name} (scored {job['score']})"
+            if job.get("feedback_note"):
+                line += f" — reason: {job['feedback_note']}"
+            lines.append(line)
 
         return "\n".join(lines) if lines else ""
     except Exception as e:
@@ -277,23 +284,48 @@ def score_emoji(score: int) -> str:
 #   Then add to SCRAPERS list: SCRAPERS = [..., scrape_<source_name>]
 # ---------------------------------------------------------------------------
 
-def fetch_job_detail(url: str) -> str:
-    """Fetch the full text content of a JICA PARTNER job detail page.
+def extract_dates_from_json_ld(soup: BeautifulSoup) -> tuple[str | None, str | None]:
+    """Extract datePosted and validThrough from Schema.org JSON-LD in a page.
 
-    Returns the visible text of the page as a string, or an empty string
-    on any network or HTTP error.
+    Searches all <script type="application/ld+json"> blocks for the first
+    object with @type "JobPosting". Returns (posted_at, deadline) as ISO 8601
+    strings, or None for either if not found.
+    """
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string or "")
+        except (json.JSONDecodeError, TypeError):
+            continue
+        items = data if isinstance(data, list) else [data]
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if item.get("@type") == "JobPosting":
+                posted = item.get("datePosted")
+                deadline = item.get("validThrough")
+                return (posted or None, deadline or None)
+    return (None, None)
+
+
+def fetch_job_detail(url: str) -> tuple[str, BeautifulSoup | None]:
+    """Fetch a job detail page.
+
+    Returns (visible_text, raw_soup) where raw_soup still has script tags
+    intact for JSON-LD extraction. Returns ("", None) on any network error.
     """
     try:
         resp = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=30)
         resp.raise_for_status()
-        soup = BeautifulSoup(resp.text, "html.parser")
-        # Remove script/style noise before extracting text
-        for tag in soup(["script", "style", "noscript"]):
+        # raw_soup preserves <script> tags for JSON-LD extraction
+        raw_soup = BeautifulSoup(resp.text, "html.parser")
+        # text_soup has scripts stripped for clean visible text
+        text_soup = BeautifulSoup(resp.text, "html.parser")
+        for tag in text_soup(["script", "style", "noscript"]):
             tag.decompose()
-        return soup.get_text(separator=" ", strip=True)
+        return (text_soup.get_text(separator=" ", strip=True), raw_soup)
     except requests.RequestException as e:
         print(f"[WARN] fetch_job_detail({url}) failed: {e}")
-        return ""
+        return ("", None)
 
 
 def scrape_jica_partner() -> list[dict]:
@@ -350,7 +382,8 @@ def scrape_jica_partner() -> list[dict]:
     # --- Pass 2: fetch detail pages and score against detail content only ---
     jobs = []
     for idx, (card_text, href, _snippet) in enumerate(collected, start=1):
-        detail_text = fetch_job_detail(href)
+        detail_text, detail_soup = fetch_job_detail(href)
+        posted_at, deadline = extract_dates_from_json_ld(detail_soup) if detail_soup else (None, None)
 
         # Extract a clean title from the detail page (first heading or first line)
         # Fall back to first 80 chars of card text
@@ -365,6 +398,8 @@ def scrape_jica_partner() -> list[dict]:
             "score": keyword_score,
             "detail_text": detail_text,
             "score_rationale": "",
+            "posted_at": posted_at,
+            "deadline": deadline,
         })
 
         print(f"[INFO] JICA detail pages: {idx}/{total} fetched")
@@ -427,7 +462,14 @@ def scrape_activo() -> list[dict]:
     # --- Pass 2: fetch detail pages and score ---
     jobs = []
     for idx, (title, href) in enumerate(collected, start=1):
-        detail_text = fetch_job_detail(href)
+        detail_text, detail_soup = fetch_job_detail(href)
+        posted_at, deadline = extract_dates_from_json_ld(detail_soup) if detail_soup else (None, None)
+
+        # Fallback: extract deadline from plain text if JSON-LD didn't have it
+        if not deadline and detail_text:
+            m = re.search(r"応募締切[：:\s]*(\d{4}[/\-]\d{2}[/\-]\d{2})", detail_text)
+            if m:
+                deadline = m.group(1).replace("/", "-")
 
         keyword_score = compute_ferrari_score(detail_text) if detail_text else 1
         jobs.append({
@@ -438,6 +480,8 @@ def scrape_activo() -> list[dict]:
             "score": keyword_score,
             "detail_text": detail_text,
             "score_rationale": "",
+            "posted_at": posted_at,
+            "deadline": deadline,
         })
 
         print(f"[INFO] Activo detail pages: {idx}/{total} fetched (keyword score: {keyword_score})")
@@ -536,6 +580,8 @@ def scrape_jica_volunteer() -> list[dict]:
                     "score": keyword_score,
                     "detail_text": listing_text,
                     "score_rationale": "",
+                    "posted_at": None,
+                    "deadline": None,
                 })
 
             # Check for next page
@@ -783,6 +829,8 @@ def sync_to_supabase(jobs: list[dict]):
                 "score_rationale": job.get("score_rationale", ""),
                 "translated_title": translated if translated != job["title"] else "",
                 "seen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "posted_at": job.get("posted_at"),
+                "deadline": job.get("deadline"),
             }
             # Upsert: insert or update score/description if link already exists
             sb.table("jobs").upsert(row, on_conflict="link").execute()
