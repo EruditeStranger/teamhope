@@ -1,7 +1,7 @@
 name: Career Scout
 on:
   schedule:
-    - cron: '0 0,12 * * *' # 9 AM and 9 PM Japan Time (scrape)
+    - cron: '35 0 * * *'   # 9:35 AM Japan Time (scrape)
     - cron: '0 6 * * *'    # 3 PM Japan Time (daily hype)
   workflow_dispatch:
     inputs:
