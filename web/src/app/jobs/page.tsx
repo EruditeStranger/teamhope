@@ -5,16 +5,16 @@ import { supabase } from "@/lib/supabase";
 import type { Job, JobStatus } from "@/lib/types";
 import JobCard from "@/app/components/JobCard";
 
-const STATUS_OPTIONS: JobStatus[] = ["interested", "applied", "interview", "rejected", "見送り"];
+const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
+  { value: "new",        label: "—" },
+  { value: "interested", label: "Interested" },
+  { value: "applied",    label: "Applied" },
+  { value: "interview",  label: "Interview" },
+  { value: "rejected",   label: "Rejected" },
+  { value: "見送り",      label: "見送り" },
+];
 
 type FeedbackFilter = "all" | "up" | "down" | "none";
-
-const FEEDBACK_TABS: { value: FeedbackFilter; label: string }[] = [
-  { value: "all",  label: "All" },
-  { value: "up",   label: "👍 Liked" },
-  { value: "down", label: "👎 Disliked" },
-  { value: "none", label: "Unrated" },
-];
 
 type Lang = "en" | "jp";
 
@@ -27,6 +27,18 @@ export default function JobsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"score" | "deadline" | "posted_at" | "seen_at">("score");
   const [lang, setLang] = useState<Lang>("jp");
+  const [feedbackCounts, setFeedbackCounts] = useState<{ up: number; down: number }>({ up: 0, down: 0 });
+
+  useEffect(() => {
+    async function loadCounts() {
+      const [{ count: up }, { count: down }] = await Promise.all([
+        supabase.from("jobs").select("*", { count: "exact", head: true }).eq("feedback", "up"),
+        supabase.from("jobs").select("*", { count: "exact", head: true }).eq("feedback", "down"),
+      ]);
+      setFeedbackCounts({ up: up ?? 0, down: down ?? 0 });
+    }
+    loadCounts();
+  }, []);
 
   const loadJobs = useCallback(async () => {
     const ascending = sortBy === "deadline";
@@ -92,7 +104,14 @@ export default function JobsPage() {
 
       {/* Feedback tabs */}
       <div className="flex gap-1 mb-6 animate-fade-up delay-1">
-        {FEEDBACK_TABS.map((tab) => (
+        {(
+          [
+            { value: "all",  label: "All" },
+            { value: "up",   label: `👍 Liked${feedbackCounts.up ? ` (${feedbackCounts.up})` : ""}` },
+            { value: "down", label: `👎 Disliked${feedbackCounts.down ? ` (${feedbackCounts.down})` : ""}` },
+            { value: "none", label: "Unrated" },
+          ] as { value: FeedbackFilter; label: string }[]
+        ).map((tab) => (
           <button
             key={tab.value}
             onClick={() => setFilterFeedback(tab.value)}
@@ -123,9 +142,8 @@ export default function JobsPage() {
           className="px-4 py-3 text-sm font-light border border-border rounded-lg bg-white focus:outline-none focus:border-calm"
         >
           <option value="all">Status: All</option>
-          <option value="new">New</option>
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s}</option>
+            <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
 

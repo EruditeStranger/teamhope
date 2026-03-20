@@ -4,7 +4,14 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Job, JobStatus } from "@/lib/types";
 
-const STATUS_OPTIONS: JobStatus[] = ["interested", "applied", "interview", "rejected", "見送り"];
+const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
+  { value: "new",        label: "—" },
+  { value: "interested", label: "Interested" },
+  { value: "applied",    label: "Applied" },
+  { value: "interview",  label: "Interview" },
+  { value: "rejected",   label: "Rejected" },
+  { value: "見送り",      label: "見送り" },
+];
 
 const NOTE_PLACEHOLDERS = {
   up: "What looked good? / どこが良さそうでしたか？",
@@ -156,7 +163,7 @@ export default function JobCard({ job, onUpdate, showStatus = true, lang = "en" 
                 className="text-xs px-3 py-1.5 rounded-full border border-border bg-white cursor-pointer font-light focus:outline-none focus:border-calm"
               >
                 {STATUS_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
             )}
