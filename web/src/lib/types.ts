@@ -29,6 +29,7 @@ export interface Job {
   updated_at: string;
   posted_at: string | null;
   deadline: string | null;
+  salary_raw: string | null;
 }
 
 export interface Org {

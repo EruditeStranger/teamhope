@@ -89,6 +89,36 @@ KEYWORD_WEIGHTS = {
 
 MAX_SCORE = 10
 
+# Salary patterns — ordered from most specific to least specific
+_SALARY_PATTERNS = [
+    # 月給 / 時給 / 日給 with range: 月給200,000円〜300,000円
+    (r"(月給|時給|日給|週給)[^\d]*(\d[\d,，]+)\s*円\s*[〜~～]\s*(\d[\d,，]+)\s*円", lambda m: f"{m.group(1)} {m.group(2)}〜{m.group(3)}円"),
+    # 年収 with range: 年収400万円〜600万円
+    (r"年収[^\d]*(\d[\d,，.]+)\s*万?円?\s*[〜~～]\s*(\d[\d,，.]+)\s*万円", lambda m: f"年収 {m.group(1)}〜{m.group(2)}万円"),
+    # 月給 / 時給 single value: 月給250,000円
+    (r"(月給|時給|日給)[^\d]*(\d[\d,，]+)\s*円", lambda m: f"{m.group(1)} {m.group(2)}円"),
+    # 年収 single value: 年収500万円
+    (r"年収[^\d]*(\d[\d,，.]+)\s*万円", lambda m: f"年収 {m.group(1)}万円"),
+    # Volunteer allowance: 生活費給付金
+    (r"(生活費給付金|生活費手当)[^\d]*(\d[\d,，]+)\s*円", lambda m: f"{m.group(1)} {m.group(2)}円"),
+]
+
+
+def extract_salary(text: str) -> str | None:
+    """Extract the first recognizable salary string from job detail text.
+
+    Returns a clean salary string (e.g. '月給 200,000〜300,000円') or None.
+    """
+    if not text:
+        return None
+    for pattern, formatter in _SALARY_PATTERNS:
+        m = re.search(pattern, text)
+        if m:
+            try:
+                return formatter(m)
+            except Exception:
+                return m.group(0)
+    return None
 
 
 def translate_text(text: str, target: str = "en") -> str:
@@ -385,6 +415,7 @@ def scrape_jica_partner() -> list[dict]:
             "score_rationale": "",
             "posted_at": posted_at,
             "deadline": deadline,
+            "salary_raw": extract_salary(detail_text),
         })
 
         print(f"[INFO] JICA detail pages: {idx}/{total} fetched")
@@ -467,6 +498,7 @@ def scrape_activo() -> list[dict]:
             "score_rationale": "",
             "posted_at": posted_at,
             "deadline": deadline,
+            "salary_raw": extract_salary(detail_text),
         })
 
         print(f"[INFO] Activo detail pages: {idx}/{total} fetched (keyword score: {keyword_score})")
@@ -567,6 +599,7 @@ def scrape_jica_volunteer() -> list[dict]:
                     "score_rationale": "",
                     "posted_at": None,
                     "deadline": None,
+                    "salary_raw": extract_salary(listing_text),
                 })
 
             # Check for next page
@@ -819,6 +852,7 @@ def sync_to_supabase(jobs: list[dict]):
                 "seen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "posted_at": job.get("posted_at"),
                 "deadline": job.get("deadline"),
+                "salary_raw": job.get("salary_raw"),
             }
             # Upsert: insert or update score/description if link already exists
             sb.table("jobs").upsert(row, on_conflict="link").execute()
