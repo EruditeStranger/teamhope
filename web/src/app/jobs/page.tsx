@@ -18,7 +18,7 @@ const VIEW_TABS: { value: ViewTab; label: string; jp: string }[] = [
 
 // Which DB statuses each view tab filters to (empty = no status filter)
 const VIEW_STATUS_MAP: Record<ViewTab, JobStatus[]> = {
-  new:      ["new"],
+  new:      [],  // filtered by seen_at recency, not status
   all:      [],
   active:   ["interested", "applied", "interview"],
   archived: ["rejected", "見送り"],
@@ -40,7 +40,8 @@ export default function JobsPage() {
       const [{ count: up }, { count: down }, { count: newJobs }] = await Promise.all([
         supabase.from("jobs").select("*", { count: "exact", head: true }).eq("feedback", "up"),
         supabase.from("jobs").select("*", { count: "exact", head: true }).eq("feedback", "down"),
-        supabase.from("jobs").select("*", { count: "exact", head: true }).eq("status", "new"),
+        supabase.from("jobs").select("*", { count: "exact", head: true })
+          .gte("seen_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
       ]);
       setCounts({ up: up ?? 0, down: down ?? 0, newJobs: newJobs ?? 0 });
     }
@@ -55,11 +56,16 @@ export default function JobsPage() {
       .gte("score", filterMinScore)
       .order(sortBy, { ascending, nullsFirst: false });
 
-    const statuses = VIEW_STATUS_MAP[viewTab];
-    if (statuses.length === 1) {
-      query = query.eq("status", statuses[0]);
-    } else if (statuses.length > 1) {
-      query = query.in("status", statuses);
+    if (viewTab === "new") {
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte("seen_at", sevenDaysAgo);
+    } else {
+      const statuses = VIEW_STATUS_MAP[viewTab];
+      if (statuses.length === 1) {
+        query = query.eq("status", statuses[0]);
+      } else if (statuses.length > 1) {
+        query = query.in("status", statuses);
+      }
     }
 
     if (filterFeedback === "up") {
