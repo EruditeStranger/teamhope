@@ -34,6 +34,7 @@ export interface Job {
   is_remote: boolean | null;
   is_bantan_commutable: boolean | null;
   job_type: string | null;
+  location_country: string | null;
 }
 
 export interface Org {

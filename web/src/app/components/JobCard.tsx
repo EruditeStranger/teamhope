@@ -147,6 +147,11 @@ export default function JobCard({ job, onUpdate, showStatus = true, lang = "en" 
           {/* Row 1: metadata */}
           <div className="flex flex-wrap items-center gap-2 mt-2">
             <span className="text-[10px] text-muted shrink-0">{job.source}</span>
+            {job.location_country && job.location_country !== "Japan" && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-accent-soft text-accent shrink-0">
+                ✈️ {job.location_country}
+              </span>
+            )}
             {job.is_remote && (
               <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-calm-soft text-calm shrink-0">
                 🏠 Remote

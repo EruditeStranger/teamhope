@@ -695,11 +695,130 @@ def scrape_jica_volunteer() -> list[dict]:
     return collected
 
 
+def scrape_reliefweb() -> list[dict]:
+    """Scrape ReliefWeb jobs via their official API v2.
+
+    Filters by career categories relevant to Sumika's profile:
+    - Coordination / Information Management
+    - Program/Project Management
+    - Communication and Advocacy
+    - Donor Relations/Grants Management
+    - Education
+    - Human Resources
+    - Partnership
+
+    API docs: https://apidoc.reliefweb.int/
+    appname: asago-to-the-moon-scout (required parameter, no approval needed)
+    """
+    base_url = "https://api.reliefweb.int/v2/jobs"
+    appname = "asago-to-the-moon-scout"
+
+    # Career category IDs relevant to Sumika's profile
+    # Source: https://apidoc.reliefweb.int/fields-reference#career_categories
+    RELEVANT_CAREER_CATEGORIES = [
+        6,   # Coordination
+        5,   # Communication & Advocacy
+        3,   # Program/Project Management
+        20,  # Partnership
+        7,   # Donor Relations/Grants Management
+        9,   # Education
+        11,  # Information Management
+    ]
+
+    all_jobs = []
+    offset = 0
+    limit = 50  # max per request
+
+    while offset < 300:  # cap at 300 to avoid excessive API calls
+        params = {
+            "appname": appname,
+            "limit": limit,
+            "offset": offset,
+            "fields[include][]": [
+                "title", "body", "date", "status",
+                "career_categories", "country", "city",
+                "source", "url", "date.closing",
+                "experience", "theme", "type",
+            ],
+            "filter[field]": "career_categories.id",
+            "filter[value][]": RELEVANT_CAREER_CATEGORIES,
+            "filter[operator]": "OR",
+            "sort[]": "date:desc",
+        }
+
+        try:
+            resp = requests.get(base_url, params=params, timeout=30,
+                                headers={"User-Agent": USER_AGENT})
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            print(f"[WARN] ReliefWeb API request failed (offset {offset}): {e}")
+            break
+
+        items = data.get("data", [])
+        if not items:
+            break
+
+        for item in items:
+            fields = item.get("fields", {})
+            title = fields.get("title", "")
+            body = fields.get("body", "") or ""
+            # Strip HTML tags from body
+            body_text = re.sub(r"<[^>]+>", " ", body).strip()
+            link = fields.get("url", f"https://reliefweb.int/job/{item.get('id', '')}")
+
+            # Location
+            countries = fields.get("country", [])
+            country_names = [c.get("name", "") for c in countries if isinstance(c, dict)]
+            location_raw = ", ".join(country_names) if country_names else None
+            location_country = country_names[0] if country_names else "International"
+
+            # Dates
+            date_info = fields.get("date", {})
+            posted_at = date_info.get("created") or date_info.get("changed")
+            deadline = date_info.get("closing")
+
+            # Source org
+            sources = fields.get("source", [])
+            org_name = sources[0].get("name", "ReliefWeb") if sources else "ReliefWeb"
+
+            keyword_score = compute_ferrari_score(f"{title} {body_text}")
+            all_jobs.append({
+                "title": title,
+                "link": link,
+                "description": body_text[:500],
+                "source": f"ReliefWeb ({org_name})",
+                "score": keyword_score,
+                "detail_text": f"{title}\n{body_text}",
+                "score_rationale": "",
+                "posted_at": posted_at,
+                "deadline": deadline,
+                "salary_raw": extract_salary(body_text),
+                "location_raw": location_raw,
+                "location_country": location_country,
+                "is_remote": any(kw in body_text for kw in _REMOTE_KEYWORDS),
+                "is_bantan_commutable": False,  # international jobs won't be commutable
+                "job_type": extract_job_type(body_text),
+            })
+
+        print(f"[INFO] ReliefWeb: fetched {len(items)} jobs at offset {offset}")
+        offset += limit
+
+        if len(items) < limit:
+            break  # last page
+
+        time.sleep(1)  # be polite to the API
+
+    print(f"[INFO] ReliefWeb total: {len(all_jobs)} listings collected")
+    return all_jobs
+
+
 # Registry of all scrapers
 SCRAPERS = [
     scrape_jica_partner,
     scrape_activo,
     scrape_jica_volunteer,
+    scrape_reliefweb,
 ]
 
 
@@ -933,6 +1052,7 @@ def sync_to_supabase(jobs: list[dict]):
                 "is_remote": job.get("is_remote", False),
                 "is_bantan_commutable": job.get("is_bantan_commutable", False),
                 "job_type": job.get("job_type", "full-time"),
+                "location_country": job.get("location_country", "Japan"),
             }
             # Upsert: insert or update score/description if link already exists
             sb.table("jobs").upsert(row, on_conflict="link").execute()

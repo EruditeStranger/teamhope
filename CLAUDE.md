@@ -176,9 +176,9 @@ All generated content must emphasize her immense responsibility (4-country safet
 | 2 | **Translate AI rationale → JP** | Low-Med | 🔲 |
 | 3 | **Weekly Recommendation Ranking** | Medium | 🔲 |
 | 4 | **Salary extraction** | Medium | 🔲 |
-| 5 | **Remote + commuting distance filter** | Med-High | 🔲 |
-| 6 | **Part-time jobs filter/tab** | Med-High | 🔲 |
-| 7 | **International jobs section** | High | 🔲 |
+| 5 | **Remote + commuting distance filter** | Med-High | ✅ |
+| 6 | **Part-time jobs filter/tab** | Med-High | ✅ |
+| 7 | **International jobs section** | High | ✅ |
 
 ### Feature Details:
 
@@ -241,6 +241,7 @@ All generated content must emphasize her immense responsibility (4-country safet
 - Refine LLM scoring based on accumulated feedback data
 - Rotate Supabase secret key
 - Scrapers: WOHL Career, CareerCross, HelloWork, ReWork-S, ReWorker, JICA Volunteer
+- **Study abroad advisory jobs** — university job boards (each has different structure; needs dedicated research pass per institution). Target profile: advising students on study abroad programmes, international office roles. Start with: JASSO (Japan), British Council, IIE (Institute of International Education), NAFSA member institution boards.
 
 ### Sumika's suggested job boards (to scrape):
 | Source | URL | Notes | Priority |

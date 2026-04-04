@@ -7,7 +7,7 @@ import JobCard from "@/app/components/JobCard";
 
 type FeedbackFilter = "all" | "up" | "down" | "none";
 type ViewTab = "new" | "all" | "active" | "archived";
-type WorkFilter = "all" | "remote" | "commutable" | "part-time";
+type WorkFilter = "all" | "remote" | "commutable" | "part-time" | "international";
 type Lang = "en" | "jp";
 
 const VIEW_TABS: { value: ViewTab; label: string; jp: string }[] = [
@@ -76,6 +76,8 @@ export default function JobsPage() {
       query = query.eq("is_bantan_commutable", true);
     } else if (filterWork === "part-time") {
       query = query.eq("job_type", "part-time");
+    } else if (filterWork === "international") {
+      query = query.not("location_country", "eq", "Japan");
     }
 
     if (filterFeedback === "up") {
@@ -177,10 +179,11 @@ export default function JobsPage() {
       <div className="flex gap-1 mb-6 animate-fade-up delay-1">
         {(
           [
-            { value: "all",       label: "All styles",       jp: "すべて" },
-            { value: "remote",    label: "🏠 Remote",        jp: "🏠 リモート" },
-            { value: "commutable",label: "🚃 Bantan-sen",    jp: "🚃 播但線沿線" },
-            { value: "part-time", label: "⏰ Part-time",     jp: "⏰ パート" },
+            { value: "all",           label: "All styles",       jp: "すべて" },
+            { value: "remote",        label: "🏠 Remote",        jp: "🏠 リモート" },
+            { value: "commutable",    label: "🚃 Bantan-sen",    jp: "🚃 播但線沿線" },
+            { value: "part-time",     label: "⏰ Part-time",     jp: "⏰ パート" },
+            { value: "international", label: "✈️ International", jp: "✈️ 海外" },
           ] as { value: WorkFilter; label: string; jp: string }[]
         ).map((chip) => (
           <button
