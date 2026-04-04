@@ -121,6 +121,67 @@ def extract_salary(text: str) -> str | None:
     return None
 
 
+# Bantan-sen line stations + Himeji area (commutable from Asago/Ikuno)
+_BANTAN_LOCATIONS = [
+    "姫路", "Himeji", "himeji",
+    "朝来", "あさご", "Asago",
+    "生野", "いくの", "Ikuno",
+    "福崎", "ふくさき", "Fukusaki",
+    "市川", "いちかわ", "Ichikawa",
+    "長谷", "Hase",
+    "寺前", "てらまえ", "Teramae",
+    "新井", "にい", "Nii",
+    "青野ヶ原", "Aonogahara",
+    "社", "やしろ", "Yashiro",
+    "粟生", "あお", "Ao",
+]
+
+_REMOTE_KEYWORDS = [
+    "テレワーク", "リモート", "在宅勤務", "在宅", "remote", "Remote", "telework",
+    "フルリモート", "リモートワーク", "完全在宅",
+]
+
+_PART_TIME_KEYWORDS = [
+    "パート", "アルバイト", "バイト", "非常勤", "嘱託", "業務委託",
+    "短時間", "時短", "パートタイム", "part-time", "part time",
+]
+
+
+def extract_location(text: str) -> tuple[str | None, bool, bool]:
+    """Extract location string, remote flag, and commutable flag from job detail text.
+
+    Returns (location_raw, is_remote, is_bantan_commutable).
+    """
+    if not text:
+        return None, False, False
+
+    is_remote = any(kw in text for kw in _REMOTE_KEYWORDS)
+
+    # Try to extract a location line (勤務地: ...)
+    m = re.search(r"勤務地[：:\s]*([^\n。]{2,40})", text)
+    location_raw = m.group(1).strip() if m else None
+
+    # Check if location or full text mentions Bantan-sen commutable areas
+    check_text = (location_raw or "") + text[:500]
+    is_bantan_commutable = any(loc in check_text for loc in _BANTAN_LOCATIONS)
+
+    return location_raw, is_remote, is_bantan_commutable
+
+
+def extract_job_type(text: str) -> str:
+    """Detect job type from text keywords.
+
+    Returns 'part-time', 'volunteer', or 'full-time'.
+    """
+    if not text:
+        return "full-time"
+    if any(kw in text for kw in _PART_TIME_KEYWORDS):
+        return "part-time"
+    if "ボランティア" in text or "JOCV" in text or "青年海外協力隊" in text:
+        return "volunteer"
+    return "full-time"
+
+
 def translate_text(text: str, target: str = "en") -> str:
     """Translate text using deep-translator (Google Translate).
 
@@ -405,6 +466,7 @@ def scrape_jica_partner() -> list[dict]:
         title = card_text[:80].split("必要言語")[0].split("勤務地")[0].strip()
 
         keyword_score = compute_ferrari_score(detail_text) if detail_text else 1
+        location_raw, is_remote, is_bantan = extract_location(detail_text)
         jobs.append({
             "title": title,
             "link": href,
@@ -416,6 +478,10 @@ def scrape_jica_partner() -> list[dict]:
             "posted_at": posted_at,
             "deadline": deadline,
             "salary_raw": extract_salary(detail_text),
+            "location_raw": location_raw,
+            "is_remote": is_remote,
+            "is_bantan_commutable": is_bantan,
+            "job_type": extract_job_type(detail_text),
         })
 
         print(f"[INFO] JICA detail pages: {idx}/{total} fetched")
@@ -488,6 +554,7 @@ def scrape_activo() -> list[dict]:
                 deadline = m.group(1).replace("/", "-")
 
         keyword_score = compute_ferrari_score(detail_text) if detail_text else 1
+        location_raw, is_remote, is_bantan = extract_location(detail_text)
         jobs.append({
             "title": title,
             "link": href,
@@ -499,6 +566,10 @@ def scrape_activo() -> list[dict]:
             "posted_at": posted_at,
             "deadline": deadline,
             "salary_raw": extract_salary(detail_text),
+            "location_raw": location_raw,
+            "is_remote": is_remote,
+            "is_bantan_commutable": is_bantan,
+            "job_type": extract_job_type(detail_text),
         })
 
         print(f"[INFO] Activo detail pages: {idx}/{total} fetched (keyword score: {keyword_score})")
@@ -589,6 +660,7 @@ def scrape_jica_volunteer() -> list[dict]:
                 title = listing_text[:120] if listing_text else f"JOCV Position {yid}"
 
                 keyword_score = compute_ferrari_score(listing_text) if listing_text else 1
+                location_raw, is_remote, is_bantan = extract_location(listing_text)
                 collected.append({
                     "title": title,
                     "link": href,
@@ -600,6 +672,10 @@ def scrape_jica_volunteer() -> list[dict]:
                     "posted_at": None,
                     "deadline": None,
                     "salary_raw": extract_salary(listing_text),
+                    "location_raw": location_raw,
+                    "is_remote": is_remote,
+                    "is_bantan_commutable": is_bantan,
+                    "job_type": "volunteer",
                 })
 
             # Check for next page
@@ -853,6 +929,10 @@ def sync_to_supabase(jobs: list[dict]):
                 "posted_at": job.get("posted_at"),
                 "deadline": job.get("deadline"),
                 "salary_raw": job.get("salary_raw"),
+                "location_raw": job.get("location_raw"),
+                "is_remote": job.get("is_remote", False),
+                "is_bantan_commutable": job.get("is_bantan_commutable", False),
+                "job_type": job.get("job_type", "full-time"),
             }
             # Upsert: insert or update score/description if link already exists
             sb.table("jobs").upsert(row, on_conflict="link").execute()

@@ -7,6 +7,7 @@ import JobCard from "@/app/components/JobCard";
 
 type FeedbackFilter = "all" | "up" | "down" | "none";
 type ViewTab = "new" | "all" | "active" | "archived";
+type WorkFilter = "all" | "remote" | "commutable" | "part-time";
 type Lang = "en" | "jp";
 
 const VIEW_TABS: { value: ViewTab; label: string; jp: string }[] = [
@@ -30,6 +31,7 @@ export default function JobsPage() {
   const [viewTab, setViewTab] = useState<ViewTab>("new");
   const [filterMinScore, setFilterMinScore] = useState<number>(5);
   const [filterFeedback, setFilterFeedback] = useState<FeedbackFilter>("all");
+  const [filterWork, setFilterWork] = useState<WorkFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"score" | "deadline" | "posted_at" | "seen_at">("score");
   const [lang, setLang] = useState<Lang>("jp");
@@ -68,6 +70,14 @@ export default function JobsPage() {
       }
     }
 
+    if (filterWork === "remote") {
+      query = query.eq("is_remote", true);
+    } else if (filterWork === "commutable") {
+      query = query.eq("is_bantan_commutable", true);
+    } else if (filterWork === "part-time") {
+      query = query.eq("job_type", "part-time");
+    }
+
     if (filterFeedback === "up") {
       query = query.eq("feedback", "up");
     } else if (filterFeedback === "down") {
@@ -85,7 +95,7 @@ export default function JobsPage() {
     const { data } = await query.limit(100);
     setJobs(data || []);
     setLoading(false);
-  }, [viewTab, filterMinScore, filterFeedback, searchQuery, sortBy]);
+  }, [viewTab, filterMinScore, filterFeedback, filterWork, searchQuery, sortBy]);
 
   useEffect(() => {
     loadJobs();
@@ -159,6 +169,30 @@ export default function JobsPage() {
             }`}
           >
             {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Work style filter chips */}
+      <div className="flex gap-1 mb-6 animate-fade-up delay-1">
+        {(
+          [
+            { value: "all",       label: "All styles",       jp: "すべて" },
+            { value: "remote",    label: "🏠 Remote",        jp: "🏠 リモート" },
+            { value: "commutable",label: "🚃 Bantan-sen",    jp: "🚃 播但線沿線" },
+            { value: "part-time", label: "⏰ Part-time",     jp: "⏰ パート" },
+          ] as { value: WorkFilter; label: string; jp: string }[]
+        ).map((chip) => (
+          <button
+            key={chip.value}
+            onClick={() => setFilterWork(chip.value)}
+            className={`px-4 py-2 text-xs rounded-lg font-light transition-colors ${
+              filterWork === chip.value
+                ? "bg-caution-soft text-caution border border-caution/30"
+                : "bg-white border border-border text-muted hover:text-ink"
+            }`}
+          >
+            {lang === "jp" ? chip.jp : chip.label}
           </button>
         ))}
       </div>

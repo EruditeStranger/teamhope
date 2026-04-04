@@ -30,6 +30,10 @@ export interface Job {
   posted_at: string | null;
   deadline: string | null;
   salary_raw: string | null;
+  location_raw: string | null;
+  is_remote: boolean | null;
+  is_bantan_commutable: boolean | null;
+  job_type: string | null;
 }
 
 export interface Org {
