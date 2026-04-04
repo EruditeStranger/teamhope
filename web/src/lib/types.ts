@@ -20,6 +20,7 @@ export interface Job {
   source: string;
   score: number;
   score_rationale: string;
+  score_rationale_jp: string | null;
   feedback: "up" | "down" | null;
   feedback_note: string | null;
   status: JobStatus;

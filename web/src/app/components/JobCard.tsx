@@ -135,8 +135,12 @@ export default function JobCard({ job, onUpdate, showStatus = true, lang = "en" 
           )}
           {job.score_rationale && (
             <p className="text-xs text-ink/60 font-light mt-1">
-              <span className="text-[10px] uppercase tracking-wide text-muted/70 not-italic mr-1">AI Note:</span>
-              <span className="italic">{job.score_rationale}</span>
+              <span className="text-[10px] uppercase tracking-wide text-muted/70 not-italic mr-1">
+                {lang === "jp" ? "AI メモ:" : "AI Note:"}
+              </span>
+              <span className="italic">
+                {lang === "jp" && job.score_rationale_jp ? job.score_rationale_jp : job.score_rationale}
+              </span>
             </p>
           )}
 

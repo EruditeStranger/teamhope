@@ -89,35 +89,19 @@ KEYWORD_WEIGHTS = {
 
 MAX_SCORE = 10
 
-_CJK_RANGES = (
-    (0x3000, 0x9FFF),   # CJK Unified Ideographs + kana + punctuation
-    (0xF900, 0xFAFF),   # CJK Compatibility Ideographs
-    (0x20000, 0x2A6DF), # CJK Extension B
-)
 
 
-def _has_japanese(text: str) -> bool:
-    """Return True if text contains at least one CJK/kana character."""
-    for ch in text:
-        cp = ord(ch)
-        if any(lo <= cp <= hi for lo, hi in _CJK_RANGES):
-            return True
-    return False
-
-
-def translate_text(text: str) -> str:
-    """Translate Japanese text to English using deep-translator.
+def translate_text(text: str, target: str = "en") -> str:
+    """Translate text using deep-translator (Google Translate).
 
     Returns the translated string, or the original text on any error.
     Only sends a request if the text actually contains CJK characters.
     """
-    if not _has_japanese(text):
-        return text
     if not _TRANSLATOR_AVAILABLE:
         print("[WARN] deep_translator not installed — skipping translation")
         return text
     try:
-        return GoogleTranslator(source="ja", target="en").translate(text) or text
+        return GoogleTranslator(source="auto", target=target).translate(text) or text
     except Exception as e:
         print(f"[WARN] translate_text failed: {e}")
         return text
@@ -818,8 +802,10 @@ def sync_to_supabase(jobs: list[dict]):
                 skipped += 1
                 continue
 
-            # Translate title for qualifying jobs
+            # Translate title and rationale for qualifying jobs
             translated = translate_text(job["title"])
+            rationale = job.get("score_rationale", "")
+            rationale_jp = translate_text(rationale, target="ja") if rationale else ""
 
             row = {
                 "title": job["title"],
@@ -827,7 +813,8 @@ def sync_to_supabase(jobs: list[dict]):
                 "description": job.get("description", "")[:500],
                 "source": job["source"],
                 "score": job["score"],
-                "score_rationale": job.get("score_rationale", ""),
+                "score_rationale": rationale,
+                "score_rationale_jp": rationale_jp if rationale_jp != rationale else "",
                 "translated_title": translated if translated != job["title"] else "",
                 "seen_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "posted_at": job.get("posted_at"),
