@@ -5,37 +5,44 @@ import { supabase } from "@/lib/supabase";
 import type { Job, JobStatus } from "@/lib/types";
 import JobCard from "@/app/components/JobCard";
 
-const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
-  { value: "new",        label: "—" },
-  { value: "interested", label: "Interested" },
-  { value: "applied",    label: "Applied" },
-  { value: "interview",  label: "Interview" },
-  { value: "rejected",   label: "Rejected" },
-  { value: "見送り",      label: "見送り" },
+type FeedbackFilter = "all" | "up" | "down" | "none";
+type ViewTab = "new" | "all" | "active" | "archived";
+type Lang = "en" | "jp";
+
+const VIEW_TABS: { value: ViewTab; label: string; jp: string }[] = [
+  { value: "new",      label: "New",      jp: "新着" },
+  { value: "all",      label: "All",      jp: "すべて" },
+  { value: "active",   label: "Active",   jp: "進行中" },
+  { value: "archived", label: "Archived", jp: "アーカイブ" },
 ];
 
-type FeedbackFilter = "all" | "up" | "down" | "none";
-
-type Lang = "en" | "jp";
+// Which DB statuses each view tab filters to (empty = no status filter)
+const VIEW_STATUS_MAP: Record<ViewTab, JobStatus[]> = {
+  new:      ["new"],
+  all:      [],
+  active:   ["interested", "applied", "interview"],
+  archived: ["rejected", "見送り"],
+};
 
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [viewTab, setViewTab] = useState<ViewTab>("new");
   const [filterMinScore, setFilterMinScore] = useState<number>(5);
   const [filterFeedback, setFilterFeedback] = useState<FeedbackFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"score" | "deadline" | "posted_at" | "seen_at">("score");
   const [lang, setLang] = useState<Lang>("jp");
-  const [feedbackCounts, setFeedbackCounts] = useState<{ up: number; down: number }>({ up: 0, down: 0 });
+  const [counts, setCounts] = useState({ up: 0, down: 0, newJobs: 0 });
 
   useEffect(() => {
     async function loadCounts() {
-      const [{ count: up }, { count: down }] = await Promise.all([
+      const [{ count: up }, { count: down }, { count: newJobs }] = await Promise.all([
         supabase.from("jobs").select("*", { count: "exact", head: true }).eq("feedback", "up"),
         supabase.from("jobs").select("*", { count: "exact", head: true }).eq("feedback", "down"),
+        supabase.from("jobs").select("*", { count: "exact", head: true }).eq("status", "new"),
       ]);
-      setFeedbackCounts({ up: up ?? 0, down: down ?? 0 });
+      setCounts({ up: up ?? 0, down: down ?? 0, newJobs: newJobs ?? 0 });
     }
     loadCounts();
   }, []);
@@ -48,8 +55,11 @@ export default function JobsPage() {
       .gte("score", filterMinScore)
       .order(sortBy, { ascending, nullsFirst: false });
 
-    if (filterStatus !== "all") {
-      query = query.eq("status", filterStatus);
+    const statuses = VIEW_STATUS_MAP[viewTab];
+    if (statuses.length === 1) {
+      query = query.eq("status", statuses[0]);
+    } else if (statuses.length > 1) {
+      query = query.in("status", statuses);
     }
 
     if (filterFeedback === "up") {
@@ -69,7 +79,7 @@ export default function JobsPage() {
     const { data } = await query.limit(100);
     setJobs(data || []);
     setLoading(false);
-  }, [filterStatus, filterMinScore, filterFeedback, searchQuery, sortBy]);
+  }, [viewTab, filterMinScore, filterFeedback, searchQuery, sortBy]);
 
   useEffect(() => {
     loadJobs();
@@ -81,7 +91,7 @@ export default function JobsPage() {
 
   return (
     <div className="animate-fade-up">
-      <div className="flex items-start justify-between mb-10">
+      <div className="flex items-start justify-between mb-8">
         <div>
           <h2 className="font-serif text-4xl font-light tracking-tight mb-1">Leads</h2>
           <p className="text-sm text-muted font-light">求人一覧 — Browse and filter all listings</p>
@@ -102,13 +112,34 @@ export default function JobsPage() {
         </div>
       </div>
 
-      {/* Feedback tabs */}
+      {/* View tabs — primary navigation */}
+      <div className="flex gap-1 mb-5 animate-fade-up delay-1">
+        {VIEW_TABS.map((tab) => {
+          const label = lang === "jp" ? tab.jp : tab.label;
+          const badge = tab.value === "new" && counts.newJobs > 0 ? ` (${counts.newJobs})` : "";
+          return (
+            <button
+              key={tab.value}
+              onClick={() => setViewTab(tab.value)}
+              className={`px-4 py-2 text-sm rounded-lg font-light transition-colors ${
+                viewTab === tab.value
+                  ? "bg-ink text-paper"
+                  : "bg-white border border-border text-muted hover:text-ink"
+              }`}
+            >
+              {label}{badge}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Feedback tabs — secondary filter */}
       <div className="flex gap-1 mb-6 animate-fade-up delay-1">
         {(
           [
             { value: "all",  label: "All" },
-            { value: "up",   label: `👍 Liked${feedbackCounts.up ? ` (${feedbackCounts.up})` : ""}` },
-            { value: "down", label: `👎 Disliked${feedbackCounts.down ? ` (${feedbackCounts.down})` : ""}` },
+            { value: "up",   label: `👍 Liked${counts.up ? ` (${counts.up})` : ""}` },
+            { value: "down", label: `👎 Disliked${counts.down ? ` (${counts.down})` : ""}` },
             { value: "none", label: "Unrated" },
           ] as { value: FeedbackFilter; label: string }[]
         ).map((tab) => (
@@ -117,7 +148,7 @@ export default function JobsPage() {
             onClick={() => setFilterFeedback(tab.value)}
             className={`px-4 py-2 text-xs rounded-lg font-light transition-colors ${
               filterFeedback === tab.value
-                ? "bg-ink text-paper"
+                ? "bg-calm-soft text-calm border border-calm/30"
                 : "bg-white border border-border text-muted hover:text-ink"
             }`}
           >
@@ -135,17 +166,6 @@ export default function JobsPage() {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="px-4 py-3 text-sm font-light border border-border rounded-lg bg-white w-full md:w-64 focus:outline-none focus:border-calm transition-colors"
         />
-
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-3 text-sm font-light border border-border rounded-lg bg-white focus:outline-none focus:border-calm"
-        >
-          <option value="all">Status: All</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
 
         <select
           value={sortBy}
@@ -179,7 +199,9 @@ export default function JobsPage() {
         <div className="space-y-2 animate-fade-up delay-2">
           {jobs.length === 0 ? (
             <div className="bg-white border border-border rounded-lg p-8 text-center text-muted font-light">
-              No jobs match your filters.
+              {viewTab === "new"
+                ? (lang === "jp" ? "新しい求人はありません。" : "No new jobs — you're all caught up.")
+                : (lang === "jp" ? "該当する求人がありません。" : "No jobs match your filters.")}
             </div>
           ) : (
             jobs.map((job) => (

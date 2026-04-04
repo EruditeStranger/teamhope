@@ -153,32 +153,105 @@ orgs (id, name, url, category, notes)
 
 All generated content must emphasize her immense responsibility (4-country safety oversight, 1,000+ participant programs, diplomatic liaison work). Combat the "unemployable" / "overqualified" mindset. She is underdeployed, not underqualified. The right organizations will see that.
 
-## 10. Next Steps (as of 2026-03-18)
+## 10. Next Steps (as of 2026-04-04)
 
 ### Completed:
 - ✅ Vercel app deployed (Supabase Postgres, ClarityMirror design, responsive/mobile)
 - ✅ Pages: Dashboard, Leads, Pipeline, Organizations, Stories (bilingual), North Star
 - ✅ Hybrid scoring: keyword prefilter → Claude Haiku LLM scoring with rationale
-- ✅ Feedback mechanism: thumbs up/down → feeds into LLM scoring prompt
+- ✅ Feedback mechanism: thumbs up/down with optional Japanese note → feeds into LLM scoring prompt
 - ✅ Only jobs scoring 5+ saved to Supabase
+- ✅ Password auth gate on Vercel app
+- ✅ Status dropdown: "—" (new) / Interested / Applied / Interview / Rejected / 見送り
+- ✅ Bilingual UI toggle (EN/JP) on Leads page
+- ✅ Posting date + deadline badges on JobCard
+- ✅ Scraper runs daily at 9:35 AM JST
+- ✅ Liked/Disliked counts on feedback tabs
 
-### Next:
-- Add password auth gate to Vercel app
-- Add scrapers for Sumika's suggested sources (see below)
+### Feature Roadmap (ordered by complexity / decided 2026-04-04):
+
+| # | Feature | Complexity | Status |
+|---|---------|-----------|--------|
+| 1 | **"New" tab in Leads** | Low | 🔲 |
+| 2 | **Translate AI rationale → JP** | Low-Med | 🔲 |
+| 3 | **Weekly Recommendation Ranking** | Medium | 🔲 |
+| 4 | **Salary extraction** | Medium | 🔲 |
+| 5 | **Remote + commuting distance filter** | Med-High | 🔲 |
+| 6 | **Part-time jobs filter/tab** | Med-High | 🔲 |
+| 7 | **International jobs section** | High | 🔲 |
+
+### Feature Details:
+
+**Feature 1 — "New" tab in Leads**
+- Add "New" as first/default tab on /jobs page, filtering `status = "new"`
+- "New" should be default view when opening /jobs
+- Changing a job's status away from "—" removes it from this tab naturally (no explicit "mark seen" needed)
+
+**Feature 2 — Translate AI rationale to JP**
+- Add `score_rationale_jp` column to `jobs` table in Supabase
+- Translate at scrape time using existing `deep-translator` (Google Translate)
+- Only translate new jobs going forward (no backfill)
+- In JP mode on Leads, show `score_rationale_jp` instead of `score_rationale`
+- Add `score_rationale_jp` to `Job` TypeScript interface
+
+**Feature 3 — Weekly Recommendation Ranking**
+- Lives on Dashboard (/) and possibly a dedicated section on /jobs
+- Logic: top 5 unreviewed (`status = "new"`) jobs by score among those scraped in the past 7 days
+- Label: "今週のおすすめ" / "This Week's Picks"
+- Resets naturally as new scrapes come in and jobs get reviewed
+- No new DB columns needed — purely frontend query logic
+
+**Feature 4 — Salary extraction**
+- Add `salary_raw` (text) column to `jobs` table
+- Scraper parses salary string from detail page (Japanese formats: 月給, 年収, 時給, etc.)
+- Normalization: attempt to parse to monthly yen if format is recognizable; fall back to raw string display
+- Show as badge in JobCard metadata row; hide entirely if null
+- JICA Volunteer allowance info (生活費給付金 etc.) counts as salary equivalent
+
+**Feature 5 — Remote + commuting distance filter**
+- Add `is_remote` (boolean) and `location_raw` (text) columns to `jobs` table
+- Scraper detects remote keywords: テレワーク, リモート, 在宅勤務, remote
+- Bantan-sen commutable = job location mentions: Himeji, 姫路, Asago, 朝来, Ikuno, 生野, Fukusaki, 福崎, or any Bantan-sen station name
+- Himeji walking-distance jobs count as commutable
+- Kobe/Osaka excluded from commutable filter (too far)
+- Frontend: add "Remote / 在宅" and "Commutable / 通勤圏" filter options on Leads page
+
+**Feature 6 — Part-time jobs filter/tab**
+- Add `job_type` column (text: "full-time" | "part-time" | "contract" | "volunteer" | "unknown")
+- Scraper detects: パート, アルバイト, 非常勤, 業務委託 → "part-time"; ボランティア → "volunteer"
+- Add tab on Leads page: "Part-time / パート"
+- Same LLM scoring criteria for now (revisit later)
+- New scrapers to add: Mama Works (mamaworks.jp), Shufu Job (part.shufu-job.jp)
+
+**Feature 7 — International jobs section**
+- Add `location_country` column (text, default "Japan")
+- New scrapers to add (equal-weighted priority sectors: Community Engagement, Youth Development, Study Abroad Advisory, Humanitarian, DevEx):
+  - ReliefWeb (reliefweb.int) — humanitarian sector, structured and scrapable
+  - DevEx (devex.com) — international development
+  - UN Careers (careers.un.org) — if API available
+  - Idealist (idealist.org) — NGO/nonprofit
+  - AIESEC job board — youth development / study abroad
+  - World Learning / SIT — study abroad advisory
+- Sumika is open to relocation abroad, especially if relocation covered
+- Scoring profile: same for now, but international jobs should get +weight for "relocation support" / 引越し支援 keywords
+- UI: "International / 海外" tab on Leads page
+
+### Backlog (not yet prioritized):
 - Cover letter / Self-PR generator page (`/generate`) — uses Claude API
 - Refine LLM scoring based on accumulated feedback data
 - Rotate Supabase secret key
+- Scrapers: WOHL Career, CareerCross, HelloWork, ReWork-S, ReWorker, JICA Volunteer
 
 ### Sumika's suggested job boards (to scrape):
-| Source | URL | Notes |
-|---|---|---|
-| Activo | activo.jp | Genre 1 = international |
-| WOHL Career | worholicareer-recruit.com | Working holiday / bilingual careers |
-| CareerCross | careercross.com | Bilingual job board |
-| 転職サイトまとめ | xn--pckua2a7gp15o89zb.com | Aggregator |
-| HelloWork | hellowork.mhlw.go.jp | Government job search |
-| ReWork-S | rework-s.com | Remote/flexible work |
-| ReWorker | reworker.jp | Remote/flexible work |
-| JICA Volunteer | jocv-info.jica.go.jp | JICA volunteer positions |
-| Mama Works | mamaworks.jp | Flexible/part-time |
-| Shufu Job | part.shufu-job.jp | Hyogo local listings |
+| Source | URL | Notes | Priority |
+|---|---|---|---|
+| Activo | activo.jp | Genre 1 = international | ✅ Active |
+| JICA Volunteer | jocv-info.jica.go.jp | JICA volunteer positions | Feature 6 |
+| Mama Works | mamaworks.jp | Flexible/part-time | Feature 6 |
+| Shufu Job | part.shufu-job.jp | Hyogo local listings | Feature 6 |
+| ReWork-S | rework-s.com | Remote/flexible work | Backlog |
+| ReWorker | reworker.jp | Remote/flexible work | Backlog |
+| WOHL Career | worholicareer-recruit.com | Working holiday / bilingual | Backlog |
+| CareerCross | careercross.com | Bilingual job board | Backlog |
+| HelloWork | hellowork.mhlw.go.jp | Government job search | Backlog |
+| 転職サイトまとめ | xn--pckua2a7gp15o89zb.com | Aggregator | Backlog |
